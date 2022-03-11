@@ -6,12 +6,12 @@
 
 ## Related documents
 
-* [Open Practices](open_practices.md)
-* [Rules of Behavior](rules_of_behavior.md)
-* [Thanks and Acknowledgements](thanks.md)
-* [Disclaimer](DISCLAIMER.md)
-* [Contribution Notice](CONTRIBUTING.md)
-* [Code of Conduct](code-of-conduct.md)
+* [Open Practices](docs/open_practices.md)
+* [Rules of Behavior](docs/rules_of_behavior.md)
+* [Thanks and Acknowledgements](docs/thanks.md)
+* [Disclaimer](docs/DISCLAIMER.md)
+* [Contribution Notice](docs/CONTRIBUTING.md)
+* [Code of Conduct](docs/code-of-conduct.md)
 
 ## Overview
 
