@@ -3,43 +3,18 @@ import numpy as np
 import os
 
 from sklearn.metrics import confusion_matrix
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, average_precision_score
-from sklearn.model_selection import StratifiedKFold, cross_val_predict
 from scipy.stats import binom, chi2, norm, percentileofscore
-from copy import deepcopy
 from multiprocessing import Pool
 from copy import deepcopy
 
-
-def vif(df, return_df=True):
-    '''Calculates variance inflation factors (VIFs) a design matrix.
-    
-    Parameters
-      df: the design matrix as a pd.DataFrame with variable/level names as cols
-      return_df: whether to return a pd.DataFrame or just the VIFs
-    
-    Returns
-      the VIFs 
-    '''
-    # Calculating the VIFs
-    R = np.corrcoef(df, rowvar=False)
-    R_inv = np.linalg.inv(R)
-    vif = R_inv.diagonal()
-    
-    if return_df:
-        vif = pd.DataFrame([df.columns.values, vif]).transpose()
-        vif.columns = ['var', 'vif']
-    
-    return vif
+from generic import *
 
 
-# Quick function for thresholding probabilities
 def threshold(probs, cutoff=.5):
     return np.array(probs >= cutoff).astype(np.uint8)
 
 
-# Calculates McNemar's chi-squared statistic
 def mcnemar_test(true, pred, cc=True):
     cm = confusion_matrix(true, pred)
     b = int(cm[0, 1])
@@ -55,7 +30,6 @@ def mcnemar_test(true, pred, cc=True):
     return out
 
 
-# Calculates the Brier score for multiclass problems
 def brier_score(true, pred):
     n_classes = len(np.unique(true))
     assert n_classes > 1
@@ -564,8 +538,6 @@ def jackknife_sample(X):
     return j_rows
 
 
-# Generates bootstrap indices of a dataset with the option
-# to stratify by one of the (binary-valued) variables
 def boot_sample(df,
                 by=None,
                 size=None,
@@ -736,43 +708,6 @@ def grid_metrics(targets,
     return pd.concat(scores, axis=0)
 
 
-def roc_cis(rocs, alpha=0.05, round=2):
-    # Getting the quantiles to make CIs
-    lq = (alpha / 2) * 100
-    uq = (1 - (alpha / 2)) * 100
-    fprs = np.concatenate([roc[0] for roc in rocs], axis=0)
-    tprs = np.concatenate([roc[1] for roc in rocs], axis=0)
-    roc_arr = np.concatenate([fprs.reshape(-1, 1), 
-                              tprs.reshape(-1, 1)], 
-                             axis=1)
-    roc_df = pd.DataFrame(roc_arr, columns=['fpr', 'tpr'])
-    roc_df.fpr = roc_df.fpr.round(round)
-    unique_fprs = roc_df.fpr.unique()
-    fpr_idx = [np.where(roc_df.fpr == fpr)[0] for fpr in unique_fprs]
-    tpr_quants = [np.percentile(roc_df.tpr[idx], q=(lq, 50, uq)) 
-                  for idx in fpr_idx]
-    tpr_quants = np.vstack(tpr_quants)
-    quant_arr = np.concatenate([unique_fprs.reshape(-1, 1),
-                                tpr_quants],
-                               axis=1)
-    quant_df = pd.DataFrame(quant_arr, columns=['fpr', 'lower',
-                                                'med', 'upper'])
-    quant_df = quant_df.sort_values('fpr')
-    return quant_df
-
-
-# Returns the maximum value of metric X that achieves a value of
-# at least yval on metric Y
-def x_at_y(x, y, yval, grid):
-    y = np.array(grid[y])
-    x = np.array(grid[x])
-    assert np.sum(y >= yval) > 0, 'No y vals meet the minimum'
-    good_y = np.where(y >= yval)[0]
-    best_x = np.max(x[good_y])
-    return best_x
-
-
-# Converts a boot_cis['cis'] object to a single row
 def merge_cis(c, round=4, mod_name=''):
     str_cis = c.round(round).astype(str)
     str_paste = pd.DataFrame(str_cis.stat + ' (' + str_cis.lower + 
@@ -791,60 +726,4 @@ def merge_ci_list(l, mod_names=None, round=4):
         merged_cis = [merge_cis(c, round=round) for c in l]
     
     return pd.concat(merged_cis, axis=0)
-
-
-def unique_combo(c):
-    if len(np.intersect1d(c[0], c[1])) == 0:
-        return c
-    else:
-        return None
-
-
-def prop_table(y, pred, axis=0, round=2):
-    tab = pd.crosstab(y, pred)
-    if axis == 1:
-        tab = tab.transpose()
-        out = tab / np.sum(tab, axis=0)
-        out = out.transpose()
-    else:
-        out = tab / np.sum(tab, axis=0)
-    if round is not None:
-        out = np.round(out, round)
-    return out
-        
-
-def risk_ratio(y, pred, round=2):
-    props = np.array(prop_table(y, pred, round=None))
-    rr = props[1, 1] / props[1, 0]
-    if round is not None:
-        rr = np.round(rr, round)
-    return rr
-
-
-def odds_ratio(y, pred, round=2):
-    tab = np.array(pd.crosstab(y, pred))
-    OR = (tab[0, 0]*tab[1, 1]) / (tab[1, 0]*tab[0, 1])
-    if round is not None:
-        OR = np.round(OR, round)
-    return OR
-
-
-def onehot_matrix(y, sparse=False):
-    if not sparse:
-        y_mat = np.zeros((y.shape[0], len(np.unique(y))))
-        for row, col in enumerate(y):
-            y_mat[row, col] = 1
-    return y_mat
-
-
-def max_probs(arr, maxes=None, axis=1):
-    if maxes is None:
-        maxes = np.argmax(arr, axis=axis)
-    out = [arr[i, maxes[i]] for i in range(arr.shape[0])]
-    return np.array(out)
-
-
-def flatten(l):
-    '''Flattens a list.'''
-    return [item for sublist in l for item in sublist]
 

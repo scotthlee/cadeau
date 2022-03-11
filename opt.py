@@ -5,102 +5,17 @@ import ortools
 import time
 import os
 
-from multiprocessing import Pool
+from importlib import reload
 from ortools.linear_solver import pywraplp
 from scipy.special import expit, erf
 
-import tools
-import multi
-
-
-def smash_log(x, B=10, d=0):
-    return 1 / (1 + np.exp(-x * B)) - d
-
-
-def sens(z, xp=xp, B=100):
-    m = z[-1]
-    z = z[:-1]
-    return smash_log(np.dot(xp, z) - m, B=B).sum() / xp.shape[0]
-
-
-def spec(z, xn=xn, B=100):
-    m = z[-1]
-    z = z[:-1]
-    return 1 - smash_log(np.dot(xn, z) - m, B=B).sum() / xn.shape[0]
-
-
-def j_lin(z, xp, xn, m):
-    z = np.round(z)
-    tpr = np.sum(np.dot(xp, z) >= m) / xp.shape[0]
-    fpr = np.sum(np.dot(xn, z) >= m) / xn.shape[0]
-    print(tpr, fpr)
-    return tpr - fpr
-
-
-def j_exp(z, xp, xn, a=1, b=1):
-    m = z[-1]
-    z = smash_log(z[:-1] - .5)
-    tpr = smash_log(np.dot(xp, z) - m + .5).sum() / xp.shape[0]
-    fpr = smash_log(np.dot(xn, z) - m + .5).sum() / xn.shape[0]
-    return -1 * (a*tpr - b*fpr)
-
-
-def j_exp_comp(z, xp, xn, c=2, a=1, b=1, th=0):
-    # Setting things up
-    s = xp.shape[1]
-    m = z[-c:]
-    z = z[:-c]
-    z = z.reshape((s, c), order='F')
-    z = smash_log(z - .5, B=15)
-    
-    # Penalizing bins where m > n
-    nvals = z.sum(0)
-    diffs = smash_log(nvals - m - .5)
-    mn_penalty = th * (c - diffs.sum())
-    
-    # Now calculating the hits
-    p_hits = smash_log(smash_log(np.dot(xp, z) - m + .5).sum(1) - .5).sum()
-    n_hits = smash_log(smash_log(np.dot(xn, z) - m + .5).sum(1) - .5).sum()
-    
-    tpr = p_hits / xp.shape[0]
-    fpr = n_hits / xn.shape[0] 
-    weighted_j = a*tpr - b*fpr
-    
-    return -1 * weighted_j + mn_penalty
-
-
-def j_lin_comp(n_mat, m_vec, X, y):
-    counts = np.array([np.dot(X, v) for v in n_mat.T]).T
-    diffs = np.array([counts[:, i] - m_vec[i] >= 0 
-                      for i in range(len(m_vec))])
-    guesses = np.array(np.sum(diffs, 0) > 0, dtype=np.uint8)
-    j = tools.clf_metrics(y, guesses).j.values[0]
-    return j
-
-
-def m_morethan_n(z, c=Nc, s=Ns):
-    # Setting things up
-    m = z[-c:]
-    z = z[:-c]
-    z = z.reshape((s, c), order='F')
-    z = smash_log(z - .5, B=15)
-    nvals = z.sum(0)
-    diffs = smash_log(nvals - m + .5)
-    return (c - diffs.sum())
+import tools.optimization as to
 
 
 # Globals
 UNIX = True
 USE_TODAY = False
 COMBINED = True
-
-# Using multiprocessing on Mac/Linux
-if UNIX:
-    base_dir = '/Users/scottlee/'
-    from multi import boot_cis
-else:
-    base_dir = 'C:/Users/yle4/'
-    from tools import boot_cis
 
 # Importing the original data
 file_dir = base_dir + 'OneDrive - CDC/Documents/projects/az covid/'
@@ -174,7 +89,7 @@ sp_con = sp.optimize.NonlinearConstraint(spec,
 # Running the program
 start = time.time()
 opt = sp.optimize.minimize(
-    fun=j_exp,
+    fun=to.j_exp,
     x0=init,
     args=(xp, xn),
     bounds=bnds
@@ -186,7 +101,7 @@ good = opt.x.round()[:-1]
 good_cols = np.where(good == 1)[0]
 good_s = [var_list[i] for i in good_cols]
 good_s
-j_lin(good, xp, xn, opt.x.round()[-1])
+to.j_lin(good, xp, xn, opt.x.round()[-1])
 
 # Now trying the compound program
 Nc = 3
@@ -213,7 +128,7 @@ z_c_mat = np.concatenate([z_c_mat, np.identity(Nc) * -1],
 mn_cons = sp.optimize.LinearConstraint(z_c_mat, 
                                        lb=0, 
                                        ub=np.inf)
-mn_cons = sp.optimize.NonlinearConstraint(m_morethan_n, 
+mn_cons = sp.optimize.NonlinearConstraint(to.m_morethan_n, 
                                           lb=-np.inf, 
                                           ub=0.999)
 
@@ -228,7 +143,7 @@ init = np.zeros(len(bnds))
 
 start = time.time()
 opt = sp.optimize.minimize(
-    fun=j_exp_comp,
+    fun=to.j_exp_comp,
     x0=init,
     args=(xp, xn, Nc),
     bounds=bnds,
@@ -241,7 +156,7 @@ start - end
 solution = opt.x.round()
 mvals = solution[-Nc:]
 good = solution[:-Nc].reshape((Ns, Nc), order='F')
-j_lin_comp(good, mvals, X, y)
+to.j_lin_comp(good, mvals, X, y)
 
 # And now trying it as a linear program; first setting up the constraints
 H = 100
