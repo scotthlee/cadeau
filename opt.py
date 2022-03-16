@@ -8,6 +8,7 @@ import os
 from importlib import reload
 from ortools.linear_solver import pywraplp
 from scipy.special import expit, erf
+from scipy import optimize
 
 import tools.optimization as to
 
@@ -16,6 +17,12 @@ import tools.optimization as to
 UNIX = True
 USE_TODAY = False
 COMBINED = True
+
+# Using multiprocessing on Mac/Linux
+if UNIX:
+    base_dir = '/Users/scottlee/'
+else:
+    base_dir = 'C:/Users/yle4/'
 
 # Importing the original data
 file_dir = base_dir + 'OneDrive - CDC/Documents/projects/az covid/'
@@ -46,7 +53,7 @@ else:
     if USE_TODAY:
         var_list += today_list
 
-var_list += ['ant']
+# var_list += ['ant']
 
 # Making them combined
 y = records.pcr.values
@@ -62,8 +69,6 @@ xp = X[:len(pos), :]
 xn = X[len(pos):, :]
 
 # Setting up the simple NLP
-#m = 1
-#n = 4
 N = X.shape[0]
 Ns = X.shape[1]
 bnds = ((0, 1),) * Ns
@@ -71,6 +76,8 @@ bnds += ((1, Ns),)
 init = np.zeros(Ns + 1)
 
 # Setting up the optional constraints for m and n
+m = 1
+n = 4
 nA = np.concatenate([np.ones(Ns),
                      np.zeros(1)])
 mA = np.concatenate([np.zeros(Ns),
@@ -79,10 +86,10 @@ ncon = sp.optimize.LinearConstraint(nA, lb=1, ub=n)
 mcon = sp.optimize.LinearConstraint(mA, lb=1, ub=m)
 
 # Optional constraints for sensitivity and/or specificity
-se_con = sp.optimize.NonlinearConstraint(sens, 
+se_con = sp.optimize.NonlinearConstraint(to.sens, 
                                          lb=0.8, 
                                          ub=1.0)
-sp_con = sp.optimize.NonlinearConstraint(spec,
+sp_con = sp.optimize.NonlinearConstraint(to.spec,
                                          lb=0.8,
                                          ub=1.0)
 
@@ -109,6 +116,18 @@ z_bnds = ((0, 1),) * Ns * Nc
 m_bnds = ((0, 16),) * Nc
 bnds = z_bnds + m_bnds
 
+
+def m_morethan_n(z, Nc=Nc, Ns=Ns):
+    """Determines whether m is more than n for a given m-of-n rule."""
+    m = z[-Nc:]
+    z = z[:-Nc]
+    z = z.reshape((Ns, Nc), order='F')
+    z = to.smash_log(z - .5, B=15)
+    nvals = z.sum(0)
+    diffs = to.smash_log(nvals - m + .5)
+    return (Nc - diffs.sum())
+
+
 # Constraint so that no symptom appears in more than one combo
 z_con_mat = np.concatenate([np.identity(Ns)] * Nc, axis=1)
 m_con_mat = np.zeros((Ns, Nc))
@@ -128,7 +147,7 @@ z_c_mat = np.concatenate([z_c_mat, np.identity(Nc) * -1],
 mn_cons = sp.optimize.LinearConstraint(z_c_mat, 
                                        lb=0, 
                                        ub=np.inf)
-mn_cons = sp.optimize.NonlinearConstraint(to.m_morethan_n, 
+mn_cons = sp.optimize.NonlinearConstraint(m_morethan_n, 
                                           lb=-np.inf, 
                                           ub=0.999)
 

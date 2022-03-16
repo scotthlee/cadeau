@@ -8,7 +8,7 @@ from scipy.stats import binom, chi2, norm, percentileofscore
 from multiprocessing import Pool
 from copy import deepcopy
 
-from generic import *
+from .generic import *
 
 
 def threshold(probs, cutoff=.5):

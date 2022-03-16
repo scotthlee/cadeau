@@ -6,6 +6,8 @@ import pandas as pd
 
 from scipy.special import expit, erf
 
+from .inference import clf_metrics
+
 
 def unique_combo(c):
     """Determines if a combination of symptoms is unique."""
@@ -88,7 +90,7 @@ def j_lin_comp(n_mat, m_vec, X, y):
     diffs = np.array([counts[:, i] - m_vec[i] >= 0 
                       for i in range(len(m_vec))])
     guesses = np.array(np.sum(diffs, 0) > 0, dtype=np.uint8)
-    j = tools.clf_metrics(y, guesses).j.values[0]
+    j = clf_metrics(y, guesses).j.values[0]
     return j
 
 
