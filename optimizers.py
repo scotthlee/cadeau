@@ -15,6 +15,9 @@ import tools.metrics as tm
 from tools.generic import smash_log, unique_combo
 
 
+def mz_to_str(m, z):
+    
+
 class TotalEnumerator:
     """A brute-force combinatorial optimizer. Hulk smash!"""
     def __init__(self,
@@ -130,8 +133,10 @@ class TotalEnumerator:
             pass
 
 
-class SmoothApproximator:
-    """A nonlinear approximation to the integer program. Ride the wave, brah."""
+class NonlinearApproximator:
+    """A nonlinear approximation to the integer program. Keeping it fast and 
+    loose.
+    """
     def __int__(self):
         return
     
@@ -168,6 +173,9 @@ class SmoothApproximator:
             only applies for compound combinations.
         """
         # Setting up the problem
+        self.var_names = X.columns.values
+        X = X.values
+        
         pos = np.where(y == 1)[0]
         neg = np.where(y == 0)[0]
         
@@ -184,7 +192,6 @@ class SmoothApproximator:
         init = np.zeros(Ns + 1)
         
         if not compound:
-            # Setting up the optional constraints for m and n
             cons = []
             if max_n:
                 n = 4
@@ -207,19 +214,26 @@ class SmoothApproximator:
                                                             ub=1.0))
             
             # Running the program
-            self.opt = sp.optimize.minimize(
+            opt = sp.optimize.minimize(
                 fun=tm.j_exp,
                 x0=init,
                 args=(xp, xn),
                 constraints=cons,
                 bounds=bnds
             )
+            self.opt = opt
+            rounded = opt.x.round()
+            self.z = rounded[:-1]
+            self.m = rounded[-1]
+            self.j = tm.j_lin(self.z, xp, xn, self.m)
             
-            good = self.opt.x.round()[:-1]
-            #good_cols = np.where(good == 1)[0]
-            #good_s = [var_list[i] for i in good_cols]
-            #good_s
-            return tm.j_lin(good, xp, xn, self.opt.x.round()[-1])
+            # Writing the output message
+            var_ids = np.where(self.z == 1)[0]
+            z_vars = ' '.join(self.var_names[var_ids])
+            best_mess = str(int(self.m)) + ' of (' + z_vars + ')'
+            print('The best combo was ' + best_mess)
+            print('The combo has a J of ' + str(round(self.j, 2)))
+            return
         else:
             # Now trying the compound program
             Nc = num_bags
@@ -228,7 +242,6 @@ class SmoothApproximator:
             bnds = z_bnds + m_bnds
             
             def m_morethan_n(z):
-                """Determines whether m is more than n for a given m-of-n rule."""
                 m = z[-Nc:]
                 z = z[:-Nc]
                 z = z.reshape((Ns, Nc), order='F')
@@ -277,9 +290,9 @@ class SmoothApproximator:
             )
             self.opt = opt
             self.solution = opt.x.round()
-            self.mvals = self.solution[-Nc:]
-            self.good = self.solution[:-Nc].reshape((Ns, Nc), order='F')
-            return tm.j_lin_comp(self.good, self.mvals, X, y)
+            self.m = self.solution[-Nc:]
+            self.z = self.solution[:-Nc].reshape((Ns, Nc), order='F')
+            return tm.j_lin_comp(self.z, self.m, X, y)
     
     def predict(self, X):
         pass
@@ -292,32 +305,23 @@ class IntegerProgram:
     def __init__(self):
         return
     
-    def fit(self, X, y):
+    def fit(self, X, y,
+            max_n=None,
+            solver='CP-SAT'):
         """Fits the optimizer.
         
         Parameters
         ----------
           max_n : int, default=5
             The maximum allowable combination size.
-          metric : str, default='j'
-            The classification metric to be optimized.
-          metric_mode : str, default='max'
-            Whether to minimize ('min') or maximimze ('max') the metric.
-          complex : bool, default=False
-            Whether to search compound combinations. Performance will \
-            probably be higher
-          use_reverse: bool, default=False
-            Whether to include reversed symptoms (e.g., 'not X'); this will \
-            double the size of the feature space.
-          n_jobs : int, default=-1
-            Number of jobs for multiprocessing. -1 runs them all.
-          top_n : int, default=100
-            Number of top-performing combinations to save.
-          batch_keep_n: int, default=15
-            Number of top combos to keep from each batch. Only the top \
-            combinations will be kept as candidates for the final cut. Usually \
-            only applies for compound combinations.
+          solver : str, default='CP-SAT'
+            Which ortools solver to use. 'SCIP' will also work, but can be 
+            really slow.
+          
         """
+        self.var_names = X.columns.values
+        X = X.values
+        
         pos = np.where(y == 1)[0]
         neg = np.where(y == 0)[0]
         
@@ -405,14 +409,17 @@ class IntegerProgram:
         else:
             print('The problem does not have an optimal solution.')
         
-        good = np.round([x[i].solution_value() 
-                         for i in range(Ns)]).astype(np.int8)
+        z = np.round([x[i].solution_value()
+                      for i in range(Ns)]).astype(np.int8)
+        m = np.round(x[Ns].solution_value()).astype(np.int8)
         
         self.vars = x
         self.solver = solver
         self.objective = objective
         self.constraint = constraint
-        self.good = good
+        self.z = z
+        self.m = m
+        
     
     def predict(self, X):
         pass
