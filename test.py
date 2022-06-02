@@ -10,7 +10,6 @@ from ortools.linear_solver import pywraplp
 from scipy.special import expit, erf
 from scipy import optimize
 
-import tools.optimization as to
 import optimizers as ops
 import tools.metrics as tm
 
@@ -20,4 +19,4 @@ records = pd.read_csv('data/test_data.csv')
 
 # Making them combined
 y = records.pcr.values
-X = records.iloc[:, records.columns != 'pcr'].values
+X = records.iloc[:, records.columns != 'pcr']

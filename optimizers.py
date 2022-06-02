@@ -2,6 +2,8 @@
 import pandas as pd
 import numpy as np
 import scipy as sp
+import math
+import tqdm
 import ortools
 
 from multiprocessing import Pool
@@ -26,7 +28,7 @@ class TotalEnumerator:
             metric_mode='max',
             compound=False,
             use_reverse=False,
-            top_n=100,
+            top_n=None,
             batch_keep_n=15,
             return_results=True):
         """Fits the optimizer.
@@ -64,15 +66,15 @@ class TotalEnumerator:
             if use_reverse:
                 X_rev = -X + 1
                 X = np.concatenate((X, X_rev), axis=1)
-
+            
             # Setting up the combinations
             n_symp = X.shape[1]
-            n_combos = [list(combinations(range(n_symp), i)) 
+            n_combos = [list(combinations(range(1, n_symp + 1), i)) 
                         for i in range(1, max_n + 1)]
-
+            
             # Dropping impossible symptom pairings
             if use_reverse:
-                clashes = [[i, i + 15] for i in range(n_symp)]
+                clashes = [[i, i + n_symp] for i in range(n_symp)]
                 keepers = [[np.sum([c[0] in l and c[1] in l
                                     for c in clashes]) == 0
                             for l in combos]
@@ -80,39 +82,49 @@ class TotalEnumerator:
                 n_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
                             for i, combos in enumerate(n_combos)]
                 symptom_list += ['no_' + s for s in symptom_list]
-
+            
             # Running the search loop
             symp_out = []
             score_fn = getattr(tm, metric)
             for i, combos in enumerate(n_combos):
                 c_out = []
-                X_combos = [X[:, c] for c in combos]
+                X_combos = [X[:, np.array(c) - 1] for c in combos]
                 for m in range(len(combos[0])):
                     inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
                                                       dtype=np.uint8) > 0, 
                                              dtype=np.uint8))
                                for x in X_combos]
                     with Pool(processes=self.n_jobs) as p:
-                        res = pd.concat(p.starmap(ti.clf_metrics, inputs),
-                                   axis=0)
-                    res['m'] = m
-                    res['n'] = i
+                        res = p.starmap(score_fn, inputs)
+                    
+                    res = pd.DataFrame(pd.Series(res), columns=[metric])
+                    res['m'] = m + 1
+                    res['n'] = i + 1
                     c_out.append(res)
                 symp_out.append(c_out)
             
             # Getting the combo names
-            combo_names = [[' '.join([symptom_list[i] for i in c])
+            combo_names = [[' '.join([symptom_list[i] 
+                                      for i in np.array(c) - 1])
                             for c in combos]
                            for combos in n_combos]
             
             # Filling in the combo names
             for i, dfs in enumerate(symp_out):
                 for j in range(len(dfs)):
-                    dfs[j]['rule'] = [str(j + 1) + ' of ' + s
+                    dfs[j]['rule'] = [str(j) + ' of ' + s
                                       for s in combo_names[i]]    
             
-            results = pd.concat(symp_out, axis=0)
+            results = pd.concat([pd.concat(dfs, axis=0)
+                                 for dfs in symp_out], axis=0)
+            results.sort_values(metric,
+                                ascending=(metric_mode != 'max'),
+                                inplace=True)
+            if top_n:
+                results = results.iloc[:top_n, :]
             
+            self.results = results
+            return
         
         def predict(self, X):
             pass
@@ -264,10 +276,10 @@ class SmoothApproximator:
                 constraints=[nmax_cons, m_sum_cons, mn_cons]
             )
             self.opt = opt
-            solution = opt.x.round()
-            mvals = solution[-Nc:]
-            good = solution[:-Nc].reshape((Ns, Nc), order='F')
-            return tm.j_lin_comp(good, mvals, X, y)
+            self.solution = opt.x.round()
+            self.mvals = self.solution[-Nc:]
+            self.good = self.solution[:-Nc].reshape((Ns, Nc), order='F')
+            return tm.j_lin_comp(self.good, self.mvals, X, y)
     
     def predict(self, X):
         pass
@@ -280,7 +292,7 @@ class IntegerProgram:
     def __init__(self):
         return
     
-    def fit(X, y):
+    def fit(self, X, y):
         """Fits the optimizer.
         
         Parameters
@@ -344,8 +356,8 @@ class IntegerProgram:
                                      np.zeros(1)])
         
         # And setting up the objective
-        divs = [1 / (xp.shape[0] / 10000)] * xp.shape[0]
-        divs += [1 / (xn.shape[0] / 10000)] * xn.shape[0]
+        divs = [1 / (xp.shape[0] / X.shape[0])] * xp.shape[0]
+        divs += [1 / (xn.shape[0] / X.shape[0])] * xn.shape[0]
         obj = np.concatenate([np.zeros(Ns),
                               np.zeros(1),
                               np.array(divs)])
@@ -363,7 +375,7 @@ class IntegerProgram:
         data = create_data_model()
         
         # Create the mip solver with the SCIP backend.
-        solver = pywraplp.Solver.CreateSolver('SCIP')
+        solver = pywraplp.Solver.CreateSolver('CP-SAT')
         x = {}
         for j in range(data['num_vars']):
             x[j] = solver.IntVar(bnds[j][0], bnds[j][1], '')
@@ -393,7 +405,14 @@ class IntegerProgram:
         else:
             print('The problem does not have an optimal solution.')
         
-        good = np.round([x[i].solution_value() for i in range(16)]).astype(np.int8)
+        good = np.round([x[i].solution_value() 
+                         for i in range(Ns)]).astype(np.int8)
+        
+        self.vars = x
+        self.solver = solver
+        self.objective = objective
+        self.constraint = constraint
+        self.good = good
     
     def predict(self, X):
         pass
