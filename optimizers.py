@@ -2,13 +2,15 @@
 import pandas as pd
 import numpy as np
 import scipy as sp
+import ortools
 
 from multiprocessing import Pool
+from ortools.linear_solver import pywraplp
 from itertools import combinations
 
-import tools.optimization as to
 import tools.inference as ti
 import tools.metrics as tm
+from tools.generic import smash_log, unique_combo
 
 
 class TotalEnumerator:
@@ -34,7 +36,8 @@ class TotalEnumerator:
           max_n : int, default=5
             The maximum allowable combination size.
           metric : str, default='j'
-            The classification metric to be optimized.
+            The classification metric to be optimized. Must be a function in \
+            tools.metrics.
           metric_mode : str, default='max'
             Whether to minimize ('min') or maximimze ('max') the metric.
           complex : bool, default=False
@@ -80,6 +83,7 @@ class TotalEnumerator:
 
             # Running the search loop
             symp_out = []
+            score_fn = getattr(tm, metric)
             for i, combos in enumerate(n_combos):
                 c_out = []
                 X_combos = [X[:, c] for c in combos]
@@ -115,7 +119,7 @@ class TotalEnumerator:
 
 
 class SmoothApproximator:
-    """A nonlinear approximation to the linear program. Ride the wave, brah."""
+    """A nonlinear approximation to the integer program. Ride the wave, brah."""
     def __int__(self):
         return
     
@@ -172,46 +176,54 @@ class SmoothApproximator:
             cons = []
             if max_n:
                 n = 4
-                nA = np.concatenate([np.ones(Ns),
-                                     np.zeros(1)])
+                nA = np.concatenate([np.ones(Ns), np.zeros(1)])
                 cons.append(sp.optimize.LinearConstraint(nA, lb=1, ub=n))
             
             if max_m:
                 m = 1
-                mA = np.concatenate([np.zeros(Ns),
-                                     np.ones(1)])
-                cons.append(optimize.LinearConstraint(mA, lb=1, ub=m))
+                mA = np.concatenate([np.zeros(Ns), np.ones(1)])
+                cons.append(sp.optimize.LinearConstraint(mA, lb=1, ub=m))
             
             if min_sens:
-                cons.append(sp.optimize.NonlinearConstraint(to.sens_exp,
+                cons.append(sp.optimize.NonlinearConstraint(tm.sens_exp,
                                                             lb=min_sens,
                                                             ub=1.0))
             
             if min_spec:
-                cons.append(sp.optimize.NonlinearConstraint(to.spec_exp,
+                cons.append(sp.optimize.NonlinearConstraint(tm.spec_exp,
                                                             lb=0.8,
                                                             ub=1.0))
             
             # Running the program
             self.opt = sp.optimize.minimize(
-                fun=to.j_exp,
+                fun=tm.j_exp,
                 x0=init,
                 args=(xp, xn),
                 constraints=cons,
                 bounds=bnds
             )
             
-            good = opt.x.round()[:-1]
+            good = self.opt.x.round()[:-1]
             #good_cols = np.where(good == 1)[0]
             #good_s = [var_list[i] for i in good_cols]
             #good_s
-            return tm.j_lin(good, xp, xn, opt.x.round()[-1])
+            return tm.j_lin(good, xp, xn, self.opt.x.round()[-1])
         else:
             # Now trying the compound program
             Nc = num_bags
             z_bnds = ((0, 1),) * Ns * Nc
             m_bnds = ((0, Ns),) * Nc
             bnds = z_bnds + m_bnds
+            
+            def m_morethan_n(z):
+                """Determines whether m is more than n for a given m-of-n rule."""
+                m = z[-Nc:]
+                z = z[:-Nc]
+                z = z.reshape((Ns, Nc), order='F')
+                z = smash_log(z - .5, B=15)
+                nvals = z.sum(0)
+                diffs = smash_log(nvals - m + .5)
+                return (Nc - diffs.sum()) 
             
             # Constraint so that no symptom appears in more than one combo
             z_con_mat = np.concatenate([np.identity(Ns)] * Nc, axis=1)
@@ -232,7 +244,7 @@ class SmoothApproximator:
             mn_cons = sp.optimize.LinearConstraint(z_c_mat, 
                                                    lb=0, 
                                                    ub=np.inf)
-            mn_cons = sp.optimize.NonlinearConstraint(to.m_morethan_n, 
+            mn_cons = sp.optimize.NonlinearConstraint(m_morethan_n, 
                                                       lb=-np.inf, 
                                                       ub=0.999)
             
@@ -244,19 +256,146 @@ class SmoothApproximator:
             # Running the optimization
             init = np.zeros(len(bnds))
             opt = sp.optimize.minimize(
-                fun=to.j_exp_comp,
+                fun=tm.j_exp_comp,
                 x0=init,
                 args=(xp, xn, Nc),
                 bounds=bnds,
                 method='trust-constr',
                 constraints=[nmax_cons, m_sum_cons, mn_cons]
             )
-            
+            self.opt = opt
             solution = opt.x.round()
             mvals = solution[-Nc:]
             good = solution[:-Nc].reshape((Ns, Nc), order='F')
-            return to.j_lin_comp(good, mvals, X, y)
+            return tm.j_lin_comp(good, mvals, X, y)
     
+    def predict(self, X):
+        pass
 
+
+class IntegerProgram:
+    """The integer program. Always optimal, never fast. Go enjoy a cup of tea, 
+    or five.
+    """
+    def __init__(self):
+        return
+    
+    def fit(X, y):
+        """Fits the optimizer.
+        
+        Parameters
+        ----------
+          max_n : int, default=5
+            The maximum allowable combination size.
+          metric : str, default='j'
+            The classification metric to be optimized.
+          metric_mode : str, default='max'
+            Whether to minimize ('min') or maximimze ('max') the metric.
+          complex : bool, default=False
+            Whether to search compound combinations. Performance will \
+            probably be higher
+          use_reverse: bool, default=False
+            Whether to include reversed symptoms (e.g., 'not X'); this will \
+            double the size of the feature space.
+          n_jobs : int, default=-1
+            Number of jobs for multiprocessing. -1 runs them all.
+          top_n : int, default=100
+            Number of top-performing combinations to save.
+          batch_keep_n: int, default=15
+            Number of top combos to keep from each batch. Only the top \
+            combinations will be kept as candidates for the final cut. Usually \
+            only applies for compound combinations.
+        """
+        pos = np.where(y == 1)[0]
+        neg = np.where(y == 0)[0]
+        
+        X = np.concatenate([X[pos], X[neg]], axis=0)
+        y = np.concatenate([y[pos], y[neg]], axis=0)
+        
+        xp = X[:len(pos), :]
+        xn = X[len(pos):, :]
+        
+        N = X.shape[0]
+        Ns = X.shape[1]
+        H = 100
+        
+        npos = len(pos)
+        nneg = len(neg)
+        
+        T_con = np.identity(N) * H * -1
+        m_con_pos = np.ones((npos, 1))
+        m_con_neg = np.ones((nneg, 1)) * -1
+        m_con = np.concatenate([m_con_pos, m_con_neg])
+        Z_con = np.concatenate([xp * -1, xn], axis=0)
+        mn_con = np.concatenate([np.ones(Ns) * -1, 
+                                 np.ones(1), 
+                                 np.zeros(N)]).reshape(1, -1)
+        con_mat = np.concatenate([Z_con, m_con, T_con], axis=1)
+        con_mat = np.concatenate([con_mat, mn_con], axis=0).astype(np.int16)
+        
+        # Setting up the bounds on the variables
+        bnds = [(0, 1)] * Ns
+        bnds += [(1, Ns)]
+        bnds += [(0, 1)] * N
+        
+        # Setting up the bounds on the constraints
+        con_bounds = np.concatenate([np.zeros(npos), 
+                                     np.ones(nneg) * -1,
+                                     np.zeros(1)])
+        
+        # And setting up the objective
+        divs = [1 / (xp.shape[0] / 10000)] * xp.shape[0]
+        divs += [1 / (xn.shape[0] / 10000)] * xn.shape[0]
+        obj = np.concatenate([np.zeros(Ns),
+                              np.zeros(1),
+                              np.array(divs)])
+        
+        def create_data_model():
+            """Stores the data for the problem."""
+            data = {}
+            data['constraint_coeffs'] = [[int(i) for i in j]for j in con_mat]
+            data['bounds'] = [i for i in con_bounds]
+            data['obj_coeffs'] = [int(i) for i in obj]
+            data['num_vars'] = con_mat.shape[1]
+            data['num_constraints'] = con_mat.shape[0]
+            return data
+        
+        data = create_data_model()
+        
+        # Create the mip solver with the SCIP backend.
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        x = {}
+        for j in range(data['num_vars']):
+            x[j] = solver.IntVar(bnds[j][0], bnds[j][1], '')
+        
+        neg_inf = -solver.infinity()
+        for i in range(data['num_constraints']):
+            constraint = solver.RowConstraint(neg_inf, data['bounds'][i], '')
+            for j in range(data['num_vars']):
+                constraint.SetCoefficient(x[j], data['constraint_coeffs'][i][j])
+        
+        objective = solver.Objective()
+        for j in range(data['num_vars']):
+            objective.SetCoefficient(x[j], data['obj_coeffs'][j])
+        
+        objective.SetMinimization()
+        
+        status = solver.Solve()
+        
+        if status == pywraplp.Solver.OPTIMAL:
+            print('Objective value =', solver.Objective().Value())
+            for j in range(data['num_vars']):
+                print(x[j].name(), ' = ', x[j].solution_value())
+            print()
+            print('Problem solved in %f milliseconds' % solver.wall_time())
+            print('Problem solved in %d iterations' % solver.iterations())
+            print('Problem solved in %d branch-and-bound nodes' % solver.nodes())
+        else:
+            print('The problem does not have an optimal solution.')
+        
+        good = np.round([x[i].solution_value() for i in range(16)]).astype(np.int8)
+    
+    def predict(self, X):
+        pass
     
                 
