@@ -1,7 +1,7 @@
 """Generic support functions"""
-
 import numpy as np
 import pandas as pd
+import math
 
 
 def prop_table(y, pred, axis=0, round=2):
@@ -15,7 +15,20 @@ def prop_table(y, pred, axis=0, round=2):
     if round is not None:
         out = np.round(out, round)
     return out
-        
+
+
+def total_combos(Ns, max_n=None, max_m=None):
+    if not max_n:
+        max_n = Ns
+    n_vals = list(range(1, max_n + 1))
+    total = 0
+    for n_val in n_vals:
+        m_vals = list(range(1, n_val + 1))
+        num_chunks = math.comb(Ns, n_val)
+        total += num_chunks * len(m_vals)
+        print([n_val, m_vals])
+    return total
+    
 
 def risk_ratio(y, pred, round=2):
     props = np.array(prop_table(y, pred, round=None))
@@ -51,3 +64,18 @@ def max_probs(arr, maxes=None, axis=1):
 def flatten(l):
     '''Flattens a list.'''
     return [item for sublist in l for item in sublist]
+
+
+def unique_combo(c):
+    """Determines if a combination of symptoms is unique."""
+    if len(np.intersect1d(c[0], c[1])) == 0:
+        return c
+    else:
+        return None
+
+def smash_log(x, B=10, d=0):
+    """Logistic function with a little extra kick."""
+    return 1 / (1 + np.exp(-x * B)) - d
+
+
+
