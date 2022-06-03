@@ -78,4 +78,11 @@ def smash_log(x, B=10, d=0):
     return 1 / (1 + np.exp(-x * B)) - d
 
 
+def zm_to_y(z, m, X):
+    """Converts a variable choice vector, minimum count, and variables 
+    to a binary guess vector.
+    """
+    return np.array(np.dot(X, z) >= m, dtype=np.uint8)
+
+
 

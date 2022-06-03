@@ -18,5 +18,5 @@ import tools.metrics as tm
 records = pd.read_csv('data/test_data.csv')
 
 # Making them combined
-y = records.pcr.values
-X = records.iloc[:, records.columns != 'pcr']
+y = records.stroke.values
+X = records.iloc[:, records.columns != 'stroke']

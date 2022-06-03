@@ -4,7 +4,7 @@ import pandas as pd
 from scipy.special import expit, erf
 from sklearn.metrics import confusion_matrix
 
-from .generic import smash_log
+from .generic import smash_log, zm_to_y
 
 
 def brier_score(targets, guesses):
@@ -20,16 +20,6 @@ def brier_score(targets, guesses):
         row_sums = np.sum(squared_diffs, axis=1) 
         bs = row_sums.mean()
     return bs
-
-
-def j(y, y_, a=1, b=1):
-    """Calculates Youden's J index from two binary vectors."""
-    c = a + b
-    a = a / c * 2
-    b = b / c * 2
-    sens = np.sum((y == 1) & (y_ == 1)) / y.sum()
-    spec = np.sum((y == 0) & (y_ == 0)) / (len(y) - y.sum())
-    return a*sens + b*spec - 1
 
 
 def mcc(y, y_):
@@ -77,13 +67,33 @@ def spec_exp(z, xn, B=100):
     return 1 - smash_log(np.dot(xn, z) - m, B=B).sum() / xn.shape[0]
 
 
-def j_lin(z, xp, xn, m):
+def j(y, y_, a=1, b=1):
+    """Calculates Youden's J index from two binary vectors."""
+    c = a + b
+    a = a / c * 2
+    b = b / c * 2
+    sens = np.sum((y == 1) & (y_ == 1)) / y.sum()
+    spec = np.sum((y == 0) & (y_ == 0)) / (len(y) - y.sum())
+    return a*sens + b*spec - 1
+
+
+def j_lin(z, m, X, y):
     """Calculates Youden's J index as a linear combination of a variable 
     choice vector, two variable matrices, and m."""
     z = np.round(z)
-    tpr = np.sum(np.dot(xp, z) >= m) / xp.shape[0]
-    fpr = np.sum(np.dot(xn, z) >= m) / xn.shape[0]
-    return tpr - fpr
+    y_ = zm_to_y(z, m, X)
+    return j(y, y_)
+
+
+def j_lin_comp(z_mat, m_vec, X, y):
+    """Calculates Youden's J index from the N matrix and M vector specifying
+    a given compound rule. Both must be binary.
+    """
+    guesses = np.array([zm_to_y(z_mat[:, i], m_vec[i], X)
+                        for i in range(z_mat.shape[1])])
+    y_ = np.array(np.sum(guesses, 0) > 0, dtype=np.uint8)
+    stat = j(y, y_)
+    return stat
 
 
 def j_exp(z, xp, xn, a=1, b=1):
@@ -122,18 +132,6 @@ def j_exp_comp(z, xp, xn, c=2, a=1, b=1, th=0):
     weighted_j = a*tpr - b*fpr
     
     return -1 * weighted_j + mn_penalty
-
-
-def j_lin_comp(n_mat, m_vec, X, y):
-    """Calculates Youden's J index from the N matrix and M vector specifying
-    a given compound rule. Both must be binary.
-    """
-    counts = np.array([np.dot(X, v) for v in n_mat.T]).T
-    diffs = np.array([counts[:, i] - m_vec[i] >= 0 
-                      for i in range(len(m_vec))])
-    guesses = np.array(np.sum(diffs, 0) > 0, dtype=np.uint8)
-    stat = j(y, guesses)
-    return stat
 
 
 def clf_metrics(true, 

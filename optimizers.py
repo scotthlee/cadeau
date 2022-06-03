@@ -15,9 +15,6 @@ import tools.metrics as tm
 from tools.generic import smash_log, unique_combo
 
 
-def mz_to_str(m, z):
-    
-
 class TotalEnumerator:
     """A brute-force combinatorial optimizer. Hulk smash!"""
     def __init__(self,
@@ -64,29 +61,29 @@ class TotalEnumerator:
         symptom_list = X.columns.values
         X = X.values.astype(np.uint8)
         
+        # Optional reversal
+        if use_reverse:
+            X_rev = -X + 1
+            X = np.concatenate((X, X_rev), axis=1)
+        
+        # Setting up the combinations
+        n_symp = X.shape[1]
+        n_combos = [list(combinations(range(1, n_symp + 1), i)) 
+                    for i in range(1, max_n + 1)]
+        
+        # Dropping impossible symptom pairings
+        if use_reverse:
+            clashes = [[i, i + n_symp] for i in range(n_symp)]
+            keepers = [[np.sum([c[0] in l and c[1] in l
+                                for c in clashes]) == 0
+                        for l in combos]
+                     for combos in n_combos]
+            n_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
+                        for i, combos in enumerate(n_combos)]
+            symptom_list += ['no_' + s for s in symptom_list]
+                
         if not compound:
-            # Optional reversal
-            if use_reverse:
-                X_rev = -X + 1
-                X = np.concatenate((X, X_rev), axis=1)
-            
-            # Setting up the combinations
-            n_symp = X.shape[1]
-            n_combos = [list(combinations(range(1, n_symp + 1), i)) 
-                        for i in range(1, max_n + 1)]
-            
-            # Dropping impossible symptom pairings
-            if use_reverse:
-                clashes = [[i, i + n_symp] for i in range(n_symp)]
-                keepers = [[np.sum([c[0] in l and c[1] in l
-                                    for c in clashes]) == 0
-                            for l in combos]
-                         for combos in n_combos]
-                n_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
-                            for i, combos in enumerate(n_combos)]
-                symptom_list += ['no_' + s for s in symptom_list]
-            
-            # Running the search loop
+            # Running the simple search loop
             symp_out = []
             score_fn = getattr(tm, metric)
             for i, combos in enumerate(n_combos):
@@ -115,7 +112,7 @@ class TotalEnumerator:
             # Filling in the combo names
             for i, dfs in enumerate(symp_out):
                 for j in range(len(dfs)):
-                    dfs[j]['rule'] = [str(j) + ' of ' + s
+                    dfs[j]['rule'] = [str(j + 1) + ' of ' + s
                                       for s in combo_names[i]]    
             
             results = pd.concat([pd.concat(dfs, axis=0)
@@ -125,6 +122,7 @@ class TotalEnumerator:
                                 inplace=True)
             if top_n:
                 results = results.iloc[:top_n, :]
+                results.reset_index(inplace=True, drop=True)
             
             self.results = results
             return
@@ -225,7 +223,7 @@ class NonlinearApproximator:
             rounded = opt.x.round()
             self.z = rounded[:-1]
             self.m = rounded[-1]
-            self.j = tm.j_lin(self.z, xp, xn, self.m)
+            self.j = tm.j_lin(self.z, self.m, X)
             
             # Writing the output message
             var_ids = np.where(self.z == 1)[0]
@@ -400,9 +398,6 @@ class IntegerProgram:
         
         if status == pywraplp.Solver.OPTIMAL:
             print('Objective value =', solver.Objective().Value())
-            for j in range(data['num_vars']):
-                print(x[j].name(), ' = ', x[j].solution_value())
-            print()
             print('Problem solved in %f milliseconds' % solver.wall_time())
             print('Problem solved in %d iterations' % solver.iterations())
             print('Problem solved in %d branch-and-bound nodes' % solver.nodes())
