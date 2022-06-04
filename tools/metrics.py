@@ -1,10 +1,11 @@
+"""Various metrics for measuring classification performance."""
 import numpy as np
 import pandas as pd
 
 from scipy.special import expit, erf
 from sklearn.metrics import confusion_matrix
 
-from .generic import smash_log, zm_to_y
+from .generic import smash_log, zm_to_y, pair_sum, combo_sum
 
 
 def brier_score(targets, guesses):
@@ -39,7 +40,7 @@ def f1(y, y_):
 
 
 def f_score(y, y_, b=1):
-    """Calculates F-score from two binary vectors."""
+    """Calculates F-score."""
     tp = np.sum((y == 1) & (y_ == 1))
     sens = tp / y.sum()
     ppv = tp / y_.sum()
@@ -47,6 +48,24 @@ def f_score(y, y_, b=1):
         return (1 + b**2) * (sens * ppv) / ((b**2 * ppv) + sens)
     else:
         return 0
+
+
+def sens(y, y_):
+    """Calculates sensitivity, or recall."""
+    tp = np.sum((y ==1) & (y_ == 1))
+    return tp / y.sum()
+
+
+def spec(y, y_):
+    """Calculates specificity, or 1 - FPR."""
+    tn = np.sum((y == 0) & (y_ == 0))
+    return tn / np.sum((y == 0))
+
+
+def ppv(y, y_):
+    """Calculates PPV, or precision."""
+    tp = np.sum((y == 1) & (y_ == 1))
+    return tp / y_.sum()
 
 
 def sens_exp(z, xp, B=100):
@@ -283,3 +302,43 @@ def clf_metrics(true,
     
     return out
 
+
+def combo_score(X, y, 
+                  cols,
+                  min=(1, 1),
+                  mode='and',
+                  metric='j'):
+    score_fun = globals()[metric]
+    ps = pair_sum(X, cols, min=min)
+    cs = combo_sum(ps)
+    if mode == 'and':
+        return score_fun(y, cs[:, 0])
+    elif mode == 'or':
+        return score_fun(y, cs[:, 1])
+
+
+def pair_score(X, c, mc, y, metric):
+    ps = pair_sum(X, c, mc)
+    cs = combo_sum(ps)
+    and_scores = score_set(y, cs[:, 0], metric)
+    or_scores = score_set(y, cs[:, 1], metric)
+    return [and_scores, or_scores]
+
+
+def score_set(y, y_, metric):
+    if metric == 'j':
+        fn1 = globals()['sens']
+        fn2 = globals()['spec']
+    elif metric == 'f1':
+        fn1 = globals()['sens']
+        fn2 = globals()['ppv']
+    elif metric == 'mcc':
+        fn1 = globals()['sens']
+        fn2 = globals()['spec']
+    fn3 = globals()[metric]
+    score_fns = [fn1, fn2, fn3]
+    return [fn(y, y_) for fn in score_fns]
+
+    
+    
+    

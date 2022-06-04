@@ -1,14 +1,8 @@
 import numpy as np
-import scipy as sp
 import pandas as pd
-import ortools
 import time
-import os
 
 from importlib import reload
-from ortools.linear_solver import pywraplp
-from scipy.special import expit, erf
-from scipy import optimize
 
 import optimizers as ops
 import tools.metrics as tm
@@ -20,3 +14,28 @@ records = pd.read_csv('data/test_data.csv')
 # Making them combined
 y = records.stroke.values
 X = records.iloc[:, records.columns != 'stroke']
+
+# Trying the different solvers on the simple problem
+start = time.time()
+ip = ops.IntegerProgram()
+ip.fit(X, y)
+end = time.time()
+ip_time = end - start
+
+start = time.time()
+nola = ops.NonlinearApproximation()
+nola.fit(X, y)
+end = time.time()
+nola_time = end - start
+
+start = time.time()
+fe = ops.FullEnumeration()
+fe.fit(X, y, max_n=None)
+end = time.time()
+fe_time = end - start
+
+# Trying the full enumeration on the compound problem
+start = time.time()
+fe.fit(X, y, compound=True, write_full=True)
+end = time.time()
+fe_comp_time = end - start

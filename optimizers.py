@@ -7,15 +7,16 @@ import tqdm
 import ortools
 
 from multiprocessing import Pool
+from copy import deepcopy
 from ortools.linear_solver import pywraplp
-from itertools import combinations
+from itertools import combinations, permutations
 
 import tools.inference as ti
 import tools.metrics as tm
-from tools.generic import smash_log, unique_combo
+import tools.generic as tg
 
 
-class TotalEnumerator:
+class FullEnumeration:
     """A brute-force combinatorial optimizer. Hulk smash!"""
     def __init__(self,
                  n_jobs=None):
@@ -25,12 +26,14 @@ class TotalEnumerator:
     def fit(self, X, y,
             max_n=5,
             metric='j',
-            metric_mode='max',
             compound=False,
             use_reverse=False,
             top_n=None,
-            batch_keep_n=15,
-            return_results=True):
+            batch_keep_n=1000,
+            write_full=True,
+            prune=True,
+            tol=.05,
+            show_progress=True):
         """Fits the optimizer.
         
         Parameters
@@ -57,11 +60,15 @@ class TotalEnumerator:
             combinations will be kept as candidates for the final cut. Usually \
             only applies for compound combinations.
         """
+        # Separating the column names and values
         n_symp = X.shape[1]
         symptom_list = X.columns.values
+        self.var_names = symptom_list
         X = X.values.astype(np.uint8)
         
-        # Optional reversal
+        if not max_n:
+            max_n = n_symp
+        
         if use_reverse:
             X_rev = -X + 1
             X = np.concatenate((X, X_rev), axis=1)
@@ -81,57 +88,158 @@ class TotalEnumerator:
             n_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
                         for i, combos in enumerate(n_combos)]
             symptom_list += ['no_' + s for s in symptom_list]
+        
+        # Running the simple search loop
+        symp_out = []
+        score_fn = getattr(tm, metric)
+        print('Evaluating the simple combinations.')
+        for i, combos in enumerate(n_combos):
+            c_out = []
+            X_combos = [X[:, np.array(c) - 1] for c in combos]
+            for m in range(len(combos[0])):
+                inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
+                                                  dtype=np.uint8) > 0, 
+                                         dtype=np.uint8),
+                           metric) for x in X_combos]
+                with Pool(processes=self.n_jobs) as p:
+                    res = p.starmap(tm.score_set, inputs)
+                    p.close()
+                    p.join()
                 
-        if not compound:
-            # Running the simple search loop
-            symp_out = []
-            score_fn = getattr(tm, metric)
-            for i, combos in enumerate(n_combos):
-                c_out = []
-                X_combos = [X[:, np.array(c) - 1] for c in combos]
-                for m in range(len(combos[0])):
-                    inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
-                                                      dtype=np.uint8) > 0, 
-                                             dtype=np.uint8))
-                               for x in X_combos]
-                    with Pool(processes=self.n_jobs) as p:
-                        res = p.starmap(score_fn, inputs)
+                res = pd.DataFrame(res, columns=['s1', 's2', metric])
+                res['m1'] = m + 1
+                res['n1'] = i + 1
+                c_out.append(res)
+            symp_out.append(c_out)
+        
+        # Getting the combo names
+        combo_names = [[' '.join([symptom_list[i] 
+                                  for i in np.array(c) - 1])
+                        for c in combos]
+                       for combos in n_combos]
+        
+        # Filling in the combo names
+        for i, dfs in enumerate(symp_out):
+            for j in range(len(dfs)):
+                dfs[j]['rule1'] = [s for s in combo_names[i]]    
+        
+        results = pd.concat([pd.concat(dfs, axis=0)
+                             for dfs in symp_out], axis=0)
+        results.sort_values(metric,
+                            ascending=False,
+                            inplace=True)
+        results[['m2', 'n2']] = 0
+        results[['rule2', 'link']] = ''
+        results = results[['m1', 'rule1', 'link',
+                           'm2', 'rule2', 'n1',
+                           'n2', 's1', 's2', metric]]
+        if top_n:
+            results = results.iloc[:top_n, :]
+            results.reset_index(inplace=True, drop=True)
+        
+        if write_full:
+            results.to_csv('data/fe_results.csv', index=False)
+        
+        self.results = results
+        
+        if compound:
+            # Make the initial list of combinations of the column combinations
+            n_combos = [list(combinations(range(0, n_symp), i)) 
+                        for i in range(1, max_n + 1)]
+            n_combos = tg.flatten(n_combos)
+            meta_iter = combinations(n_combos, 2)
+            
+            with Pool(processes=self.n_jobs) as p:
+                print('Building the list of compound combinations.')
+                metacombos = p.map(tg.unique_combo, meta_iter)
+                p.close()
+                p.join()
+            
+            metacombos = [c for c in metacombos if c is not None]
+            
+            # Combos of m for m-of-n
+            mcs = [pair for pair in permutations(range(1, max_n + 1), 2)]
+            mcs += [(i, i) for i in range(1, max_n + 1)]
+            
+            # Sums for at least 2 
+            raw_pairsums = [[(X, c, mc, y, metric) 
+                             for c in metacombos] for mc in mcs]
+            
+            # Weeding out combinations that don't make sense
+            pairsum_input = []
+            for i, pairs in enumerate(raw_pairsums):
+                good_pairs = [pair for pair in pairs
+                              if len(pair[1][0]) >= pair[2][0] 
+                              and len(pair[1][1]) >= pair[2][1]]
+                pairsum_input.append(good_pairs)
+            pairsum_input = [input for input in pairsum_input
+                             if len(input) > 0]
+            
+            # Max number of combos to consider from 'and', 'or', and 'any'
+            print('Running the evaluation loop.')
+            num_runs = str(len(pairsum_input))
+            for run_num, input in enumerate(pairsum_input):
+                batch_n = np.min([len(input), batch_keep_n])
+                print('')
+                print('Running batch ' + str(run_num + 1) + ' of ' + num_runs)
+                
+                if show_progress:
+                    input = tqdm.tqdm(input)
+                
+                with Pool(processes=self.n_jobs) as p:
+                    # Calculating f1 score for each of the combo sums
+                    scores = p.starmap(tm.pair_score, input)
+                    and_scores = pd.DataFrame([s[0] for s in scores])
+                    or_scores = pd.DataFrame([s[1] for s in scores])
+                    all_scores = pd.concat([and_scores, or_scores], axis=0)
+                    all_scores.columns = ['s1', 's2', metric]
                     
-                    res = pd.DataFrame(pd.Series(res), columns=[metric])
-                    res['m'] = m + 1
-                    res['n'] = i + 1
-                    c_out.append(res)
-                symp_out.append(c_out)
-            
-            # Getting the combo names
-            combo_names = [[' '.join([symptom_list[i] 
-                                      for i in np.array(c) - 1])
-                            for c in combos]
-                           for combos in n_combos]
-            
-            # Filling in the combo names
-            for i, dfs in enumerate(symp_out):
-                for j in range(len(dfs)):
-                    dfs[j]['rule'] = [str(j + 1) + ' of ' + s
-                                      for s in combo_names[i]]    
-            
-            results = pd.concat([pd.concat(dfs, axis=0)
-                                 for dfs in symp_out], axis=0)
-            results.sort_values(metric,
-                                ascending=(metric_mode != 'max'),
-                                inplace=True)
-            if top_n:
-                results = results.iloc[:top_n, :]
-                results.reset_index(inplace=True, drop=True)
-            
-            self.results = results
-            return
+                    # Getting the names of the rules as strings
+                    or_input = [(pair, 'or', self.var_names) 
+                                 for pair in input]
+                    or_info = p.starmap(tg.pair_info, or_input)
+                    p.close()
+                    p.join()
+                
+                or_df = pd.DataFrame(or_info,
+                                     columns=['m1', 'rule1', 'link',
+                                              'm2', 'rule2', 'n1', 'n2'])
+                and_df = deepcopy(or_df)
+                and_df['link'] = 'and'
+                info_df = pd.concat([and_df, or_df], axis=0)
+                info_df = pd.concat([info_df, all_scores], axis=1)
+                batch_res = info_df.sort_values(metric,
+                                                ascending=False)
+                batch_res = batch_res.iloc[0:batch_n, :]
+                
+                if write_full:
+                    batch_res.to_csv('data/fe_results.csv',
+                                     mode='a',
+                                     header=False,
+                                     index=False)
+                if prune:
+                    best_max = self.results[metric].max()
+                    current_max = batch_res[metric].max()
+                    if (current_max - best_max) >= -tol:
+                        self.results = pd.concat([batch_res,
+                                                  self.results], axis=0)
+                    else:
+                        print('Previous max was ' + str(best_max))
+                        print('Current max is only ' + str(current_max))
+                        print('Discarding current batch of rules.')
+                else:
+                    self.results = pd.concat([batch_res,
+                                              self.results], aixs=0)
+                    self.results.sort_values(metric,
+                                             ascending=False,
+                                             inplace=True)
+        return
         
         def predict(self, X):
             pass
 
 
-class NonlinearApproximator:
+class NonlinearApproximation:
     """A nonlinear approximation to the integer program. Keeping it fast and 
     loose.
     """
@@ -223,7 +331,7 @@ class NonlinearApproximator:
             rounded = opt.x.round()
             self.z = rounded[:-1]
             self.m = rounded[-1]
-            self.j = tm.j_lin(self.z, self.m, X)
+            self.j = tm.j_lin(self.z, self.m, X, y)
             
             # Writing the output message
             var_ids = np.where(self.z == 1)[0]
@@ -243,9 +351,9 @@ class NonlinearApproximator:
                 m = z[-Nc:]
                 z = z[:-Nc]
                 z = z.reshape((Ns, Nc), order='F')
-                z = smash_log(z - .5, B=15)
+                z = tg.smash_log(z - .5, B=15)
                 nvals = z.sum(0)
-                diffs = smash_log(nvals - m + .5)
+                diffs = tg.smash_log(nvals - m + .5)
                 return (Nc - diffs.sum()) 
             
             # Constraint so that no symptom appears in more than one combo
