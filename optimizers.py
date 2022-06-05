@@ -7,6 +7,7 @@ import tqdm
 import ortools
 
 from multiprocessing import Pool
+from scipy.sparse import csr_matrix
 from copy import deepcopy
 from ortools.linear_solver import pywraplp
 from itertools import combinations, permutations
@@ -66,6 +67,16 @@ class FullEnumeration:
         self.var_names = symptom_list
         X = X.values.astype(np.uint8)
         
+        # Setting up a lookup dictionary for the metric names
+        metric_dict = {'j': {'fn1': 'sens',
+                             'fn2': 'spec'},
+                       'f1': {'fn1': 'sens',
+                              'fn2': 'ppv'},
+                       'mcc': {'fn1': 'sens',
+                               'fn2': 'spec'}}
+        fn1 = metric_dict[metric]['fn1']
+        fn2 = metric_dict[metric]['fn2']
+        
         if not max_n:
             max_n = n_symp
         
@@ -75,7 +86,7 @@ class FullEnumeration:
         
         # Setting up the combinations
         n_symp = X.shape[1]
-        n_combos = [list(combinations(range(1, n_symp + 1), i)) 
+        col_combos = [list(combinations(range(1, n_symp + 1), i)) 
                     for i in range(1, max_n + 1)]
         
         # Dropping impossible symptom pairings
@@ -84,16 +95,16 @@ class FullEnumeration:
             keepers = [[np.sum([c[0] in l and c[1] in l
                                 for c in clashes]) == 0
                         for l in combos]
-                     for combos in n_combos]
-            n_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
-                        for i, combos in enumerate(n_combos)]
+                     for combos in col_combos]
+            col_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
+                        for i, combos in enumerate(col_combos)]
             symptom_list += ['no_' + s for s in symptom_list]
         
         # Running the simple search loop
         symp_out = []
         score_fn = getattr(tm, metric)
         print('Evaluating the simple combinations.')
-        for i, combos in enumerate(n_combos):
+        for i, combos in enumerate(col_combos):
             c_out = []
             X_combos = [X[:, np.array(c) - 1] for c in combos]
             for m in range(len(combos[0])):
@@ -106,7 +117,7 @@ class FullEnumeration:
                     p.close()
                     p.join()
                 
-                res = pd.DataFrame(res, columns=['s1', 's2', metric])
+                res = pd.DataFrame(res, columns=[fn1, fn2, metric])
                 res['m1'] = m + 1
                 res['n1'] = i + 1
                 c_out.append(res)
@@ -116,7 +127,7 @@ class FullEnumeration:
         combo_names = [[' '.join([symptom_list[i] 
                                   for i in np.array(c) - 1])
                         for c in combos]
-                       for combos in n_combos]
+                       for combos in col_combos]
         
         # Filling in the combo names
         for i, dfs in enumerate(symp_out):
@@ -132,7 +143,7 @@ class FullEnumeration:
         results[['rule2', 'link']] = ''
         results = results[['m1', 'rule1', 'link',
                            'm2', 'rule2', 'n1',
-                           'n2', 's1', 's2', metric]]
+                           'n2', fn1, fn2, metric]]
         if top_n:
             results = results.iloc[:top_n, :]
             results.reset_index(inplace=True, drop=True)
@@ -144,10 +155,10 @@ class FullEnumeration:
         
         if compound:
             # Make the initial list of combinations of the column combinations
-            n_combos = [list(combinations(range(0, n_symp), i)) 
+            col_combos = [list(combinations(range(0, n_symp), i)) 
                         for i in range(1, max_n + 1)]
-            n_combos = tg.flatten(n_combos)
-            meta_iter = combinations(n_combos, 2)
+            col_combos = tg.flatten(col_combos)
+            meta_iter = combinations(col_combos, 2)
             
             with Pool(processes=self.n_jobs) as p:
                 print('Building the list of compound combinations.')
@@ -192,7 +203,7 @@ class FullEnumeration:
                     and_scores = pd.DataFrame([s[0] for s in scores])
                     or_scores = pd.DataFrame([s[1] for s in scores])
                     all_scores = pd.concat([and_scores, or_scores], axis=0)
-                    all_scores.columns = ['s1', 's2', metric]
+                    all_scores.columns = [fn1, fn2, metric]
                     
                     # Getting the names of the rules as strings
                     or_input = [(pair, 'or', self.var_names) 

@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import time
+import seaborn as sns
 
+from matplotlib import pyplot as plt
 from importlib import reload
 
 import optimizers as ops
