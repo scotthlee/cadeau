@@ -66,7 +66,7 @@ class FullEnumeration:
         symptom_list = X.columns.values
         self.var_names = symptom_list
         X = X.values.astype(np.uint8)
-        
+
         # Setting up a lookup dictionary for the metric names
         metric_dict = {'j': {'fn1': 'sens',
                              'fn2': 'spec'},
@@ -76,19 +76,19 @@ class FullEnumeration:
                                'fn2': 'spec'}}
         fn1 = metric_dict[metric]['fn1']
         fn2 = metric_dict[metric]['fn2']
-        
+
         if not max_n:
             max_n = n_symp
-        
+
         if use_reverse:
             X_rev = -X + 1
             X = np.concatenate((X, X_rev), axis=1)
-        
+
         # Setting up the combinations
         n_symp = X.shape[1]
         col_combos = [list(combinations(range(1, n_symp + 1), i)) 
                     for i in range(1, max_n + 1)]
-        
+
         # Dropping impossible symptom pairings
         if use_reverse:
             clashes = [[i, i + n_symp] for i in range(n_symp)]
@@ -99,43 +99,39 @@ class FullEnumeration:
             col_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
                         for i, combos in enumerate(col_combos)]
             symptom_list += ['no_' + s for s in symptom_list]
-        
-        # Running the simple search loop
-        symp_out = []
-        score_fn = getattr(tm, metric)
-        print('Evaluating the simple combinations.')
-        for i, combos in enumerate(col_combos):
-            c_out = []
-            X_combos = [X[:, np.array(c) - 1] for c in combos]
-            for m in range(len(combos[0])):
-                inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
-                                                  dtype=np.uint8) > 0, 
-                                         dtype=np.uint8),
-                           metric) for x in X_combos]
-                with Pool(processes=self.n_jobs) as p:
-                    res = p.starmap(tm.score_set, inputs)
-                    p.close()
-                    p.join()
-                
-                res = pd.DataFrame(res, columns=[fn1, fn2, metric])
-                res['m1'] = m + 1
-                res['n1'] = i + 1
-                c_out.append(res)
-            symp_out.append(c_out)
-        
+
         # Getting the combo names
         combo_names = [[' '.join([symptom_list[i] 
                                   for i in np.array(c) - 1])
                         for c in combos]
                        for combos in col_combos]
-        
-        # Filling in the combo names
-        for i, dfs in enumerate(symp_out):
-            for j in range(len(dfs)):
-                dfs[j]['rule1'] = [s for s in combo_names[i]]    
-        
-        results = pd.concat([pd.concat(dfs, axis=0)
-                             for dfs in symp_out], axis=0)
+
+        # Running the simple search loop
+        symp_out = []
+        score_fn = getattr(tm, metric)
+        print('Evaluating the simple combinations.')
+
+        with Pool() as p:
+            for i, combos in enumerate(col_combos):
+                c_out = []
+                X_combos = [X[:, np.array(c) - 1] for c in combos]
+                for m in range(len(combos[0])):
+                    inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
+                                                      dtype=np.uint8) > 0, 
+                                             dtype=np.uint8),
+                               metric) for x in X_combos]
+                    res = np.array(p.starmap(tm.score_set, inputs))
+                    mn = np.array([[m + 1, i + 1]] * res.shape[0])
+                    cols = np.array(combo_names[i]).reshape(-1, 1)
+                    c_out.append(np.concatenate([mn, cols, res], axis=1))
+                symp_out.append(np.concatenate(c_out, axis=0))
+
+        p.close()
+        p.join()
+
+        results = pd.DataFrame(np.concatenate(symp_out),
+                               columns=['m1', 'n1', 'rule1',
+                                         fn1, fn2, metric])
         results.sort_values(metric,
                             ascending=False,
                             inplace=True)
@@ -147,12 +143,12 @@ class FullEnumeration:
         if top_n:
             results = results.iloc[:top_n, :]
             results.reset_index(inplace=True, drop=True)
-        
+
         if write_full:
             results.to_csv('data/fe_results.csv', index=False)
-        
+
         self.results = results
-        
+
         if compound:
             # Make the initial list of combinations of the column combinations
             col_combos = [list(combinations(range(0, n_symp), i)) 
