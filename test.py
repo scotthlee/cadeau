@@ -46,3 +46,4 @@ start = time.time()
 nola.fit(X, y, compound=True)
 end = time.time()
 nola_comp_time = end - start
+

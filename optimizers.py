@@ -2,20 +2,20 @@
 import pandas as pd
 import numpy as np
 import scipy as sp
+import seaborn as sns
 import sklearn
 import math
 import tqdm
 import ortools
 
 from multiprocessing import Pool
-from scipy.sparse import csr_matrix
 from copy import deepcopy
 from ortools.linear_solver import pywraplp
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from matplotlib import pyplot as plt
 from itertools import combinations, permutations
 
-import tools.inference as ti
 import tools.metrics as tm
 import tools.generic as tg
 
@@ -95,7 +95,7 @@ class FeaturePruner:
         """
         self.var_names = X.columns.values
         if self.factor < 1:
-            top_n = int(self.pruning_factor * X.shape[1])
+            top_n = int(self.factor * X.shape[1])
         else:
             top_n = self.factor
         if other_args:
