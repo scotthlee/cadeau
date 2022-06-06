@@ -21,8 +21,6 @@ import tools.generic as tg
 
 
 class FeaturePruner:
-    """A wrapper for sklearn models that can be used to whittle down the 
-    feature space for large problems."""
     def __init__(self,
                  model_type='rf',
                  factor=0.5,
@@ -30,6 +28,31 @@ class FeaturePruner:
                  n_estimators=1000,
                  l1_ratio=0.5,
                  other_args=None):
+        """A wrapper for sklearn models that can be used to whittle down the 
+        feature space for large problems.
+        
+        Parameters
+        ----------
+        model_type : str, default='rf'
+          The kind of model to use as the pruner. Options are a random forest 
+          ('rf'), a gradient boosting classifier ('gbc'), and a logistic
+          regression with L1 ('l1'), L2 ('l2'), and L1+L2 ('elasticnet') 
+          penalties.
+        factor : float or int, default=0.5
+          Either the proportion or number of original features to keep.
+        n_jobs : int, default=-1
+          n_jobs parameter to pass to sklearn models. -1 uses all processes.
+        n_estimators : int, default=1000
+          n_estimators parameter to pass to sklearn.ensemble models.
+        l1_ratio : float in (0, 1), default=0.5
+          Blending parameter for the L!/L2 penalties in elasticnet.
+        other_args : dict, default=None
+          Dictionary of other args for the base model.
+        
+        Returns
+        ----------
+        A FeaturePruner object with a base model ready to fit.
+        """
         tree_dict = {'rf': 'RandomForestClassifier',
                     'gbc': 'GradientBoostingClassifier'}
         self.tree_mods = ['rf', 'gbc']
@@ -53,6 +76,23 @@ class FeaturePruner:
         self.factor = factor
     
     def fit(self, X, y, return_x=False, other_args=None):
+        """Fits the FeaturePruner to a dataset.
+        
+        Parameters
+        ----------
+        X : pd.DataFrame
+          The array of predictors.
+        y : array-like
+          The array of targets for prediction.
+        return_x : bool, default=False
+          Whether to return the pruned predictors after fitting.
+        other_args : dict, default=None
+          A dict of other args to pass to the base model fit() function.
+        
+        Returns
+        ----------
+        None or a pd.DataFrame of the pruned predictors.
+        """
         self.var_names = X.columns.values
         if self.factor < 1:
             top_n = int(self.pruning_factor * X.shape[1])
@@ -76,6 +116,15 @@ class FeaturePruner:
             self.X
     
     def predict(self, X):
+        """Returns a pruned version of a dataset.
+        
+        Parameters
+        ----------
+        X : pd.DataFrame or np.array
+        
+        Returns
+        ----------
+        """
         if type(X) == type(pd.DataFrame([0])):
             return X[self.top_var_names]
         else:
@@ -104,27 +153,37 @@ class FullEnumeration:
         
         Parameters
         ----------
-          max_n : int, default=5
+        max_n : int, default=5
             The maximum allowable combination size.
-          metric : str, default='j'
-            The classification metric to be optimized. Must be a function in \
-            tools.metrics.
-          metric_mode : str, default='max'
-            Whether to minimize ('min') or maximimze ('max') the metric.
-          complex : bool, default=False
+        metric : str, default='j'
+            The classification metric to be optimized. Must be either 'j', 'f1',
+            or 'mcc'.
+        compound : bool, default=False
             Whether to search compound combinations. Performance will \
             probably be higher
-          use_reverse: bool, default=False
+        use_reverse : bool, default=False
             Whether to include reversed symptoms (e.g., 'not X'); this will \
             double the size of the feature space.
-          n_jobs : int, default=-1
-            Number of jobs for multiprocessing. -1 runs them all.
-          top_n : int, default=100
+        top_n : int, default=100
             Number of top-performing combinations to save.
-          batch_keep_n: int, default=15
+        batch_keep_n : int, default=15
             Number of top combos to keep from each batch. Only the top \
             combinations will be kept as candidates for the final cut. Usually \
             only applies for compound combinations.
+        write_full : bool, default=True
+            Whether to write the full (pre-pruned) set of results to disk. If 
+            prune is on, only the pruned results will be saved when this is off.
+        prune : bool, default=True
+            Whether to discard combinatinos from each batch that are worse than 
+            the best result from previous batches.
+        tol : float, default=0.05,
+            Maximum amount of a metric a combination in a batch can lag the max 
+            from previous batches before being discarded. Only applies when 
+            prune is set to True. 
+        
+        Returns
+        ----------
+        
         """
         # Separating the column names and values
         n_symp = X.shape[1]
