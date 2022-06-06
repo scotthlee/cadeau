@@ -36,8 +36,13 @@ fe.fit(X, y, max_n=None)
 end = time.time()
 fe_time = end - start
 
-# Trying the full enumeration on the compound problem
+# Trying the full enumeration and approximation on the compound problem
 start = time.time()
 fe.fit(X, y, compound=True, write_full=True)
 end = time.time()
 fe_comp_time = end - start
+
+start = time.time()
+nola.fit(X, y, compound=True)
+end = time.time()
+nola_comp_time = end - start

@@ -2,6 +2,7 @@
 import pandas as pd
 import numpy as np
 import scipy as sp
+import sklearn
 import math
 import tqdm
 import ortools
@@ -10,6 +11,8 @@ from multiprocessing import Pool
 from scipy.sparse import csr_matrix
 from copy import deepcopy
 from ortools.linear_solver import pywraplp
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from itertools import combinations, permutations
 
 import tools.inference as ti
@@ -17,10 +20,72 @@ import tools.metrics as tm
 import tools.generic as tg
 
 
+class FeaturePruner:
+    """A wrapper for sklearn models that can be used to whittle down the 
+    feature space for large problems."""
+    def __init__(self,
+                 model_type='rf',
+                 factor=0.5,
+                 n_jobs=-1, 
+                 n_estimators=1000,
+                 l1_ratio=0.5,
+                 other_args=None):
+        tree_dict = {'rf': 'RandomForestClassifier',
+                    'gbc': 'GradientBoostingClassifier'}
+        self.tree_mods = ['rf', 'gbc']
+        if model_type in self.tree_mods:
+            args = {'n_estimators': n_estimators,
+                    'n_jobs': n_jobs}
+            if other_args:
+                args = {**args, **other_args}
+            mod_fn = getattr(sklearn.ensemble, 
+                             tree_dict[model_type])
+            self.mod = mod_fn(**args)
+        else:
+            args = {'penalty': model_type,
+                    'solver': 'saga',
+                    'l1_ratio': l1_ratio}
+            if other_args:
+                args = {**args, **other_args}
+            self.mod = LogisticRegression(**args)
+        
+        self.mod_type = model_type
+        self.factor = factor
+    
+    def fit(self, X, y, return_x=False, other_args=None):
+        self.var_names = X.columns.values
+        if self.factor < 1:
+            top_n = int(self.pruning_factor * X.shape[1])
+        else:
+            top_n = self.factor
+        if other_args:
+            self.mod.fit(X, y, **kwargs)
+        else:
+            self.mod.fit(X, y)
+        if self.mod_type in self.tree_mods:
+            imps = self.mod.feature_importances_
+        else:
+            imps = self.mod.coef_[0]
+        
+        sorted_imps = np.argsort(imps)[::-1]
+        self.top_feature_ids = sorted_imps[:top_n]
+        self.sorted_var_names = [self.var_names[f] for f in sorted_imps]  
+        self.top_var_names = [self.var_names[f] for f in self.top_feature_ids]  
+        self.X= X.iloc[:, self.top_feature_ids]
+        if return_x:
+            self.X
+    
+    def predict(self, X):
+        if type(X) == type(pd.DataFrame([0])):
+            return X[self.top_var_names]
+        else:
+            return X[:, self.top_feature_ids]
+
+
+
 class FullEnumeration:
     """A brute-force combinatorial optimizer. Hulk smash!"""
-    def __init__(self,
-                 n_jobs=None):
+    def __init__(self, n_jobs=None):
         self.n_jobs = n_jobs
         return
     
@@ -111,7 +176,7 @@ class FullEnumeration:
         score_fn = getattr(tm, metric)
         print('Evaluating the simple combinations.')
 
-        with Pool() as p:
+        with Pool(processes=self.n_jobs) as p:
             for i, combos in enumerate(col_combos):
                 c_out = []
                 X_combos = [X[:, np.array(c) - 1] for c in combos]
@@ -140,15 +205,20 @@ class FullEnumeration:
         results = results[['m1', 'rule1', 'link',
                            'm2', 'rule2', 'n1',
                            'n2', fn1, fn2, metric]]
+        float_cols = [fn1, fn2, metric]
+        int_cols = ['m1', 'm2', 'n1', 'n2']
+        results[float_cols] = results[float_cols].astype(float)
+        results[int_cols] = results[int_cols].astype(int)
+        
         if top_n:
             results = results.iloc[:top_n, :]
             results.reset_index(inplace=True, drop=True)
-
+        
         if write_full:
             results.to_csv('data/fe_results.csv', index=False)
-
+        
         self.results = results
-
+        
         if compound:
             # Make the initial list of combinations of the column combinations
             col_combos = [list(combinations(range(0, n_symp), i)) 
@@ -185,15 +255,15 @@ class FullEnumeration:
             # Max number of combos to consider from 'and', 'or', and 'any'
             print('Running the evaluation loop.')
             num_runs = str(len(pairsum_input))
-            for run_num, input in enumerate(pairsum_input):
-                batch_n = np.min([len(input), batch_keep_n])
-                print('')
-                print('Running batch ' + str(run_num + 1) + ' of ' + num_runs)
-                
-                if show_progress:
-                    input = tqdm.tqdm(input)
-                
-                with Pool(processes=self.n_jobs) as p:
+            with Pool(processes=self.n_jobs) as p:
+                for run_num, input in enumerate(pairsum_input):
+                    batch_n = np.min([len(input), batch_keep_n])
+                    print('')
+                    print('Running batch ' + str(run_num + 1) + ' of ' + num_runs)
+                    
+                    if show_progress:
+                        input = tqdm.tqdm(input)
+                    
                     # Calculating f1 score for each of the combo sums
                     scores = p.starmap(tm.pair_score, input)
                     and_scores = pd.DataFrame([s[0] for s in scores])
@@ -205,41 +275,40 @@ class FullEnumeration:
                     or_input = [(pair, 'or', self.var_names) 
                                  for pair in input]
                     or_info = p.starmap(tg.pair_info, or_input)
-                    p.close()
-                    p.join()
-                
-                or_df = pd.DataFrame(or_info,
-                                     columns=['m1', 'rule1', 'link',
-                                              'm2', 'rule2', 'n1', 'n2'])
-                and_df = deepcopy(or_df)
-                and_df['link'] = 'and'
-                info_df = pd.concat([and_df, or_df], axis=0)
-                info_df = pd.concat([info_df, all_scores], axis=1)
-                batch_res = info_df.sort_values(metric,
-                                                ascending=False)
-                batch_res = batch_res.iloc[0:batch_n, :]
-                
-                if write_full:
-                    batch_res.to_csv('data/fe_results.csv',
-                                     mode='a',
-                                     header=False,
-                                     index=False)
-                if prune:
-                    best_max = self.results[metric].max()
-                    current_max = batch_res[metric].max()
-                    if (current_max - best_max) >= -tol:
-                        self.results = pd.concat([batch_res,
-                                                  self.results], axis=0)
+                    or_df = pd.DataFrame(or_info,
+                                         columns=['m1', 'rule1', 'link',
+                                                  'm2', 'rule2', 'n1', 'n2'])
+                    and_df = deepcopy(or_df)
+                    and_df['link'] = 'and'
+                    info_df = pd.concat([and_df, or_df], axis=0)
+                    info_df = pd.concat([info_df, all_scores], axis=1)
+                    batch_res = info_df.sort_values(metric,
+                                                    ascending=False)
+                    batch_res = batch_res.iloc[0:batch_n, :]
+                    
+                    if write_full:
+                        batch_res.to_csv('data/fe_results.csv',
+                                         mode='a',
+                                         header=False,
+                                         index=False)
+                    if prune:
+                        best_max = self.results[metric].max()
+                        current_max = batch_res[metric].max()
+                        if (current_max - best_max) >= -tol:
+                            self.results = pd.concat([batch_res,
+                                                      self.results], axis=0)
+                        else:
+                            print('Previous max was ' + str(best_max))
+                            print('Current max is only ' + str(current_max))
+                            print('Discarding current batch of rules.')
                     else:
-                        print('Previous max was ' + str(best_max))
-                        print('Current max is only ' + str(current_max))
-                        print('Discarding current batch of rules.')
-                else:
-                    self.results = pd.concat([batch_res,
-                                              self.results], aixs=0)
-                    self.results.sort_values(metric,
-                                             ascending=False,
-                                             inplace=True)
+                        self.results = pd.concat([batch_res,
+                                                  self.results], aixs=0)
+        
+        p.close()
+        p.join()
+        self.results.sort_values(metric, ascending=False, inplace=True)
+        
         return
         
         def predict(self, X):
@@ -305,27 +374,24 @@ class NonlinearApproximation:
         init = np.zeros(Ns + 1)
         
         if not compound:
+            # Setting up the optional constraints
             cons = []
             if max_n:
                 n = 4
                 nA = np.concatenate([np.ones(Ns), np.zeros(1)])
                 cons.append(sp.optimize.LinearConstraint(nA, lb=1, ub=n))
-            
             if max_m:
                 m = 1
                 mA = np.concatenate([np.zeros(Ns), np.ones(1)])
                 cons.append(sp.optimize.LinearConstraint(mA, lb=1, ub=m))
-            
             if min_sens:
                 cons.append(sp.optimize.NonlinearConstraint(tm.sens_exp,
                                                             lb=min_sens,
                                                             ub=1.0))
-            
             if min_spec:
                 cons.append(sp.optimize.NonlinearConstraint(tm.spec_exp,
                                                             lb=0.8,
                                                             ub=1.0))
-            
             # Running the program
             opt = sp.optimize.minimize(
                 fun=tm.j_exp,
