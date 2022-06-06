@@ -303,21 +303,8 @@ def clf_metrics(true,
     return out
 
 
-def combo_score(X, y, 
-                  cols,
-                  min=(1, 1),
-                  mode='and',
-                  metric='j'):
-    score_fun = globals()[metric]
-    ps = pair_sum(X, cols, min=min)
-    cs = combo_sum(ps)
-    if mode == 'and':
-        return score_fun(y, cs[:, 0])
-    elif mode == 'or':
-        return score_fun(y, cs[:, 1])
-
-
 def pair_score(X, c, mc, y, metric):
+    """Scores a pair of sets of columns."""
     ps = pair_sum(X, c, mc)
     cs = combo_sum(ps)
     and_scores = score_set(y, cs[:, 0], metric)
@@ -326,6 +313,7 @@ def pair_score(X, c, mc, y, metric):
 
 
 def score_set(y, y_, metric):
+    """Provides a small set of scores for a set of predictions."""
     if metric == 'j':
         fn1 = globals()['sens']
         fn2 = globals()['spec']
@@ -339,6 +327,3 @@ def score_set(y, y_, metric):
     score_fns = [fn1, fn2, fn3]
     return [fn(y, y_) for fn in score_fns]
 
-    
-    
-    

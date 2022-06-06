@@ -130,8 +130,8 @@ def pair_info(pair, link, col_list):
     pair_m = pair[2]
     m1 = pair_m[0]
     m2 = pair_m[1]
-    n1 = len(pair[1])
-    n2 = len(pair[2])
+    n1 = len(pair_cols[0])
+    n2 = len(pair_cols[1])
     
     # Making the string specifying the condition
     cnames = []
