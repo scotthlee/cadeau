@@ -12,7 +12,6 @@ from multiprocessing import Pool
 from copy import deepcopy
 from ortools.linear_solver import pywraplp
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
 from matplotlib import pyplot as plt
 from itertools import combinations, permutations
 
@@ -20,6 +19,9 @@ from . import metrics, tools
 
 
 class FeaturePruner:
+    """A wrapper for sklearn models that can be used to whittle down the 
+    feature space for large problems.
+    """
     def __init__(self,
                  model_type='rf',
                  factor=0.5,
@@ -27,8 +29,7 @@ class FeaturePruner:
                  n_estimators=1000,
                  l1_ratio=0.5,
                  other_args=None):
-        """A wrapper for sklearn models that can be used to whittle down the 
-        feature space for large problems.
+        """Initializes the pruner.
         
         Parameters
         ----------
@@ -155,7 +156,7 @@ class FullEnumeration:
         max_n : int, default=5
             The maximum allowable combination size.
         metric : str, default='j'
-            The classification metric to be optimized. Must be either 'j', 'f1',
+            The classification metric to be optimized. Options are 'j', 'f1',
             or 'mcc'.
         compound : bool, default=False
             Whether to search compound combinations. Performance will \
@@ -374,7 +375,7 @@ class FullEnumeration:
 
 
 class NonlinearApproximation:
-    """A nonlinear approximation to the integer program. Keeping it fast and 
+    """A nonlinear approximation to the integer program. Playing it fast and 
     loose.
     """
     def __int__(self):
@@ -462,14 +463,12 @@ class NonlinearApproximation:
             rounded = opt.x.round()
             self.z = rounded[:-1]
             self.m = rounded[-1]
-            self.j = metrics.j_lin(self.z, self.m, X, y)
             
-            # Writing the output message
-            var_ids = np.where(self.z == 1)[0]
-            z_vars = ' '.join(self.var_names[var_ids])
-            best_mess = str(int(self.m)) + ' of (' + z_vars + ')'
-            print('The best combo was ' + best_mess)
-            print('The combo has a J of ' + str(round(self.j, 2)))
+            # Calculating the result's scores
+            rule_cols = tools.zm_to_rule(self.z, self.m, self.var_names)
+            y_ = self.predict(X)
+            score_cols = metrics.score_set(y, y_, 'j', True)
+            self.results = pd.concat([rule_cols, score_cols], axis=1)
             return
         else:
             # Now trying the compound program
@@ -532,13 +531,12 @@ class NonlinearApproximation:
             return metrics.j_lin_comp(self.z, self.m, X, y)
     
     def predict(self, X):
-        pass
+        """Returns the optimal guesses for a new set of data."""
+        return tools.zm_to_y(self.z, self.m, X)
 
 
 class IntegerProgram:
-    """The integer program. Always optimal, never fast. Go enjoy a cup of tea, 
-    or five.
-    """
+    """The integer program. Always optimal, and usually fast."""
     def __init__(self):
         return
     

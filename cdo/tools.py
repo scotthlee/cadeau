@@ -125,10 +125,39 @@ def zm_to_rule(z, m, cols, rule_num=1, return_df=True):
     rule = ' '.join(var_names)
     m_col = 'm' + str(rule_num)
     n_col = 'n' + str(rule_num)
+    rule_col = 'rule' + str(rule_num)
     if return_df:
         out = pd.DataFrame([m, rule, n]).transpose()
-        out.columns = [m_col, rule, n_col]
+        out.columns = [m_col, rule_col, n_col]
     else:
         out = m, rule, n
     return out
+
+
+def split_rule(rule, var_names):
+    """Splits a single-string compound rule into two sub-rules."""
+    link_dict = {'and': 1, 'or': 0}
+    link_id = np.where([x not in var_names for x in rule])[0][0]
+    link_val = link_dict[rule[link_id]]
+    return rule[:link_id], rule[link_id + 1:], link_val
+    
+
+def rule_to_y(X, rule_df):
+    """Converts a rule from DataFrame results format to a vector of guesses."""
+    if rule_df.shape[0] > 1:
+        rule_df = rule_df.to_frame().transpose()
+    
+    link_dict = {'and': 1, 'or': 0}
+    cols1 = list(rule_df.rule1.values)[0].split()
+    y1 = np.array(X[cols1].sum(1) >= rule_df.m1.values[0],
+                  dtype=np.uint8)
+    if ('n2' in rule_df.columns.values) and (rule_df.n2.values != 0):
+        link_val = link_dict[rule_df.link.values[0]]
+        cols2 = list(rule_df.rule2.values)[0].split()
+        y2 = np.array(X[cols2].sum(1) >= rule_df.m2.values[0],
+                      dtype=np.uint8)
+        return np.array(y1 + y2 > link_val,
+                        dtype=np.uint8)  
+    else:
+        return y1
     
