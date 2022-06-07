@@ -6,8 +6,8 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from importlib import reload
 
-import optimizers as ops
-import tools.metrics as tm
+from cdo import optimizers as ops
+from cdo import metrics
 
 
 # Importing the original data
