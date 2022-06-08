@@ -218,7 +218,7 @@ class boot_cis:
         mcnemar=False,
         seed=10221983):
         # Converting everything to NumPy arrays, just in case
-        stype = type(pd.Series())
+        stype = type(pd.Series([0]))
         if type(targets) == stype:
             targets = targets.values
         if type(guesses) == stype:

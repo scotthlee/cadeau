@@ -348,7 +348,9 @@ def clf_metrics(true,
     
     # And finally tacking on the model name
     if mod_name is not None:
+        stat_cols = list(out.columns.values)
         out['model'] = mod_name
+        out = out[['model'] + stat_cols]
     
     return out
 

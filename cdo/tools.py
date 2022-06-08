@@ -161,3 +161,19 @@ def rule_to_y(X, rule_df):
     else:
         return y1
 
+
+def rule_to_str(rule_df, n):
+    n_str = str(n)
+    m = rule_df['m' + n_str].values[0]
+    n = rule_df['n' + n_str].values[0]
+    rule = rule_df['rule' + n_str].values[0]
+    return 'At least ' + str(m) + ' of (' + rule + ')'
+
+def rule_df_to_str(rule_df):
+    out = rule_to_str(rule_df, 1)
+    if 'n2' in rule_df.columns.values:
+        if rule_df.n2 != 0:
+            out += ' ' + rule_df.link + ' At least ' + rule_to_str(rule_df, 2)
+    return out
+    
+            
