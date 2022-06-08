@@ -8,10 +8,11 @@ import math
 import tqdm
 import ortools
 
-from multiprocessing import Pool
+from multiprocessing import Pool, Array
 from copy import deepcopy
 from ortools.linear_solver import pywraplp
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from matplotlib import pyplot as plt
 from itertools import combinations, permutations
 
@@ -24,7 +25,6 @@ class FeaturePruner:
     """
     def __init__(self,
                  model_type='rf',
-                 factor=0.5,
                  n_jobs=-1, 
                  n_estimators=1000,
                  l1_ratio=0.5,
@@ -38,8 +38,6 @@ class FeaturePruner:
           ('rf'), a gradient boosting classifier ('gbc'), and a logistic
           regression with L1 ('l1'), L2 ('l2'), and L1+L2 ('elasticnet') 
           penalties.
-        factor : float or int, default=0.5
-          Either the proportion or number of original features to keep.
         n_jobs : int, default=-1
           n_jobs parameter to pass to sklearn models. -1 uses all processes.
         n_estimators : int, default=1000
@@ -73,9 +71,11 @@ class FeaturePruner:
             self.mod = LogisticRegression(**args)
         
         self.mod_type = model_type
-        self.factor = factor
-    
-    def fit(self, X, y, return_x=False, other_args=None):
+        
+    def fit(self, X, y, 
+            factor=0.5,
+            return_x=False, 
+            other_args=None):
         """Fits the FeaturePruner to a dataset.
         
         Parameters
@@ -84,6 +84,8 @@ class FeaturePruner:
           The array of predictors.
         y : array-like
           The array of targets for prediction.
+        factor : float or int, default=0.5
+          Either the proportion or number of original features to keep.
         return_x : bool, default=False
           Whether to return the pruned predictors after fitting.
         other_args : dict, default=None
@@ -93,6 +95,7 @@ class FeaturePruner:
         ----------
         None or a pd.DataFrame of the pruned predictors.
         """
+        self.factor = factor
         self.var_names = X.columns.values
         if self.factor < 1:
             top_n = int(self.factor * X.shape[1])
@@ -145,7 +148,8 @@ class FullEnumeration:
             use_reverse=False,
             top_n=None,
             batch_keep_n=1000,
-            write_full=True,
+            write_full=False,
+            csv_name='fe_results.csv',
             prune=True,
             tol=.05,
             show_progress=True):
@@ -249,9 +253,8 @@ class FullEnumeration:
                     cols = np.array(combo_names[i]).reshape(-1, 1)
                     c_out.append(np.concatenate([mn, cols, res], axis=1))
                 symp_out.append(np.concatenate(c_out, axis=0))
-
-        p.close()
-        p.join()
+            p.close()
+            p.join()
 
         results = pd.DataFrame(np.concatenate(symp_out),
                                columns=['m1', 'n1', 'rule1',
@@ -268,19 +271,19 @@ class FullEnumeration:
         int_cols = ['m1', 'm2', 'n1', 'n2']
         results[float_cols] = results[float_cols].astype(float)
         results[int_cols] = results[int_cols].astype(int)
-        
+
         if top_n:
             results = results.iloc[:top_n, :]
             results.reset_index(inplace=True, drop=True)
-        
+
         if write_full:
-            results.to_csv('data/fe_results.csv', index=False)
-        
+            results.to_csv('data/' + csv_name, index=False)
+
         self.results = results
-        
+
         if compound:
             # Make the initial list of combinations of the column combinations
-            col_combos = [list(combinations(range(0, n_symp), i)) 
+            col_combos = [list(combinations(range(n_symp), i)) 
                         for i in range(1, max_n + 1)]
             col_combos = tools.flatten(col_combos)
             meta_iter = combinations(col_combos, 2)
@@ -346,7 +349,7 @@ class FullEnumeration:
                     batch_res = batch_res.iloc[0:batch_n, :]
                     
                     if write_full:
-                        batch_res.to_csv('data/fe_results.csv',
+                        batch_res.to_csv('data/' + csv_name,
                                          mode='a',
                                          header=False,
                                          index=False)
@@ -363,15 +366,17 @@ class FullEnumeration:
                     else:
                         self.results = pd.concat([batch_res,
                                                   self.results], aixs=0)
+
+            p.close()
+            p.join()
         
-        p.close()
-        p.join()
         self.results.sort_values(metric, ascending=False, inplace=True)
+        self.results.reset_index(inplace=True, drop=True)
         
         return
-        
-        def predict(self, X):
-            pass
+    
+    def predict(self, X):
+        return tools.rule_to_y(X, self.results.loc[0])
 
 
 class NonlinearApproximation:

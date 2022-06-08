@@ -56,8 +56,8 @@ def sparsify(col,
     return out
 
 
-def row_sums(m, min=1):
-    sums = np.sum(m, axis=1)
+def row_sums(c, min=1):
+    sums = np.sum(c, axis=1)
     return np.array(sums >= min, dtype=np.uint8)
 
 
@@ -160,4 +160,4 @@ def rule_to_y(X, rule_df):
                         dtype=np.uint8)  
     else:
         return y1
-    
+

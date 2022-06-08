@@ -17,6 +17,10 @@ records = pd.read_csv('data/test_data.csv')
 y = records.stroke.values
 X = records.iloc[:, records.columns != 'stroke']
 
+# Setting up a pruner to whittle down the variables
+pruner = ops.FeaturePruner()
+pruner.fit(X, y, factor=8)
+
 # Trying the different solvers on the simple problem
 start = time.time()
 ip = ops.IntegerProgram()
