@@ -216,7 +216,8 @@ class boot_cis:
         interpolation="nearest",
         average='weighted',
         mcnemar=False,
-        seed=10221983):
+        seed=10221983,
+        undef_val=0):
         # Converting everything to NumPy arrays, just in case
         stype = type(pd.Series([0]))
         if type(targets) == stype:
@@ -228,7 +229,8 @@ class boot_cis:
         stat = clf_metrics(targets,
                            guesses,
                            average=average,
-                           mcnemar=mcnemar).transpose()
+                           mcnemar=mcnemar,
+                           undef_val=undef_val).transpose()
 
         # Pulling out the column names to pass to the bootstrap dataframes
         colnames = list(stat.index.values)
@@ -249,8 +251,10 @@ class boot_cis:
                              seed=seed) for seed in seeds]
         scores = [clf_metrics(targets[b], 
                               guesses[b], 
-                              average=average) for b in boots]
+                              average=average,
+                              undef_val=undef_val) for b in boots]
         scores = pd.concat(scores, axis=0)
+        self.scores = scores
 
         # Calculating the confidence intervals
         lower = (a / 2) * 100

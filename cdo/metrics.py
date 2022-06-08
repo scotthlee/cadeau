@@ -23,10 +23,10 @@ def brier_score(targets, guesses):
     return bs
 
 
-def mcc(y, y_):
+def mcc(y, y_, undef_val=0):
     """Calculates Matthews Correlation Coefficient."""
     prod = j(y, y_) * j(y_, y) * mk(y, y_) * mk(y_, y)
-    return prod ** (1/4) if prod != 0 else 0
+    return prod ** (1/4) if prod != 0 else undef_val
 
 
 def f1(y, y_):
@@ -34,14 +34,14 @@ def f1(y, y_):
     return f_score(y, y_, b=1)
 
 
-def f_score(y, y_, b=1):
+def f_score(y, y_, b=1, undef_val=0):
     """Calculates F-score."""
-    sens = sens(y, y_)
-    ppv = ppv(y, y_)
-    if sens + ppv != 0:
-        return (1 + b**2) * (sens * ppv) / ((b**2 * ppv) + sens)
+    se = sens(y, y_)
+    pv = ppv(y, y_)
+    if se + pv != 0:
+        return (1 + b**2) * (se * pv) / ((b**2 * pv) + se)
     else:
-        return 0
+        return undef_val
 
 
 def sens(y, y_):
@@ -212,7 +212,8 @@ def clf_metrics(true,
                 round=4,
                 round_pval=False,
                 mcnemar=False,
-                argmax_axis=1):
+                argmax_axis=1,
+                undef_val=0):
     '''Runs basic diagnostic stats on binary (only) predictions'''
     # Converting pd.Series to np.array
     stype = type(pd.Series([0]))
@@ -295,16 +296,19 @@ def clf_metrics(true,
     fn = confmat[1, 0]
     
     # Calculating the main binary metrics
-    ppv = np.round(tp / (tp + fp), round) if tp + fp > 0 else 0
-    sens = np.round(tp / (tp + fn), round) if tp + fn > 0 else 0
-    spec = np.round(tn / (tn + fp), round) if tn + fp > 0 else 0
-    npv = np.round(tn / (tn + fn), round) if tn + fn > 0 else 0
-    f1 = np.round(2*(sens*ppv) / (sens+ppv), round) if sens + ppv != 0 else 0 
+    ppv = np.round(tp / (tp + fp), round) if tp + fp > 0 else undef_val
+    sens = np.round(tp / (tp + fn), round) if tp + fn > 0 else undef_val
+    spec = np.round(tn / (tn + fp), round) if tn + fp > 0 else undef_val
+    npv = np.round(tn / (tn + fn), round) if tn + fn > 0 else undef_val
+    if sens + ppv != 0:
+        f1 = np.round(2*(sens*ppv) / (sens+ppv), round)  
+    else:
+        f1 = undef_val
     
     # Calculating the Matthews correlation coefficient
     mcc_num = ((tp * tn) - (fp * fn))
     mcc_denom = np.sqrt(((tp+fp)*(tp+fn)*(tn+fp)*(tn+fn)))
-    mcc = mcc_num / mcc_denom if mcc_denom != 0 else 0
+    mcc = mcc_num / mcc_denom if mcc_denom != 0 else undef_val
     
     # Calculating Youden's J and the Brier score
     j = sens + spec - 1

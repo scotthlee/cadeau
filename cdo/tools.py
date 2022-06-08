@@ -169,11 +169,19 @@ def rule_to_str(rule_df, n):
     rule = rule_df['rule' + n_str].values[0]
     return 'At least ' + str(m) + ' of (' + rule + ')'
 
+
 def rule_df_to_str(rule_df):
     out = rule_to_str(rule_df, 1)
     if 'n2' in rule_df.columns.values:
         if rule_df.n2 != 0:
             out += ' ' + rule_df.link + ' At least ' + rule_to_str(rule_df, 2)
     return out
-    
-            
+
+
+def tab_to_vecs(tp, tn, fp, fn):
+    tp = np.array([[1, 1]] * tp)
+    tn = np.array([[0, 0]] * tn)
+    fn = np.array([[1, 0]] * fn)
+    fp = np.array([[0, 1]] * fp)
+    good = [a for a in [tp, tn, fn, fp] if a.shape[0] != 0]
+    return np.concatenate(good)
