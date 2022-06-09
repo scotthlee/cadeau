@@ -21,18 +21,24 @@ from . import metrics, tools
 
 
 metric_dict = {
-    'j': {'fn1': 'sens',
-          'fn2': 'spec',
-          'xlab': '1 - Specificity',
-          'ylab': 'Sensitivity'},
-    'f1': {'fn1': 'sens',
-           'fn2': 'ppv',
-           'xlab': 'PPV',
-           'ylab': 'Sensitivity'},
-    'mcc': {'fn1': 'j',
-            'fn2': 'mk',
-            'xlab': 'Markedness',
-            'ylab': 'Informedness'}
+    'j': {
+        'fn1': 'sens',
+        'fn2': 'spec',
+        'xlab': '1 - Specificity',
+        'ylab': 'Sensitivity'
+    },
+    'f1': {
+        'fn1': 'sens',
+        'fn2': 'ppv',
+        'xlab': 'PPV',
+        'ylab': 'Sensitivity'
+    },
+    'mcc': {
+        'fn1': 'j',
+        'fn2': 'mk',
+        'xlab': 'Markedness',
+        'ylab': 'Informedness'
+    }
 }
 
 
@@ -399,19 +405,20 @@ class FullEnumeration:
     def plot(self, 
              metric=None, 
              mark_best=True,
-             separate_n=True,
+             separate_n=False,
              hue='total_n',
              grid_style='darkgrid',
-             palette='colorblind',
-             flip_axes=False):
+             palette='crest',
+             font_scale=1,
+             add_hull=False):
         """Plots combinations in the selected metric's space."""
         sns.set_style('darkgrid')
-        sns.set(font_scale=2)
-        cr = sns.color_palette(palette)
-        cb = sns.color_palette('colorblind')
+        sns.set(font_scale=font_scale)
+        cp = sns.color_palette(palette)
         
         if not metric:
             metric = self.metric
+        
         md = metric_dict[self.metric]
         fn1, fn2 = md['fn1'], md['fn2']
         xlab, ylab = md['xlab'], md['ylab']
@@ -422,28 +429,28 @@ class FullEnumeration:
         if metric == 'j':
             x = 1 - self.results[fn2].values
         
-        if separate_n:
-            rp = sns.relplot(x=x, 
-                             y=y, 
-                             hue='m1', 
-                             col='n1', 
-                             data=self.results,
-                             kind='scatter',
-                             palette='crest')
-            rp.set(xlim=(0, 1), ylim=(0, 1))
-            rp.fig.set_tight_layout(True)
-            rp.set_xlabels(xlab)
-            rp.set_ylabels(xlab)
-        else:
-            sp = sns.scatterplot(x=x,
-                                 y=y,
-                                 hue=metric,
-                                 data=self.results)
-            sp.set(xlim=(0, 1), ylim=(0, 1))
-            plt.tight_layout()
+        rp_col = 'total_n' if separate_n else None
+        
+        rp = sns.relplot(x=x, 
+                         y=y, 
+                         hue=self.results[metric], 
+                         col=rp_col, 
+                         data=self.results,
+                         kind='scatter',
+                         palette=palette)
+        
+        if mark_best and not separate_n:
+            plt.scatter(x[0], y[0], 
+                        color='black',
+                        marker='x')
             
+        rp.set(xlim=(0, 1), ylim=(0, 1))
+        rp.fig.set_tight_layout(True)
+        rp.set_xlabels(xlab)
+        rp.set_ylabels(xlab)        
+        
         plt.show()
-
+        
         
     def predict(self, X):
         return tools.rule_to_y(X, self.results.loc[0])
@@ -473,7 +480,7 @@ class NonlinearApproximation:
             The classification metric to be optimized.
           metric_mode : str, default='max'
             Whether to minimize ('min') or maximimze ('max') the metric.
-          complex : bool, default=False
+          compound : bool, default=False
             Whether to search compound combinations. Performance will \
             probably be higher
           use_reverse: bool, default=False
