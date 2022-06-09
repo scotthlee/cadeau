@@ -406,7 +406,7 @@ class FullEnumeration:
              metric=None, 
              mark_best=True,
              separate_n=False,
-             hue='total_n',
+             hue=None,
              grid_style='darkgrid',
              palette='crest',
              font_scale=1,
@@ -418,6 +418,9 @@ class FullEnumeration:
         
         if not metric:
             metric = self.metric
+        
+        if not hue:
+            hue = metric
         
         md = metric_dict[self.metric]
         fn1, fn2 = md['fn1'], md['fn2']
