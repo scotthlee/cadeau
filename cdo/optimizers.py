@@ -152,7 +152,8 @@ class FullEnumeration:
             csv_name='fe_results.csv',
             prune=True,
             tol=.05,
-            show_progress=True):
+            progress_bars=True,
+            verbose=False):
         """Fits the optimizer.
         
         Parameters
@@ -237,7 +238,8 @@ class FullEnumeration:
         # Running the simple search loop
         symp_out = []
         score_fn = getattr(metrics, metric)
-        print('Evaluating the simple combinations.')
+        if verbose:
+            print('Evaluating the simple combinations.')
 
         with Pool(processes=self.n_jobs) as p:
             for i, combos in enumerate(col_combos):
@@ -289,7 +291,9 @@ class FullEnumeration:
             meta_iter = combinations(col_combos, 2)
             
             with Pool(processes=self.n_jobs) as p:
-                print('Building the list of compound combinations.')
+                if verbose:
+                    print('Building the list of compound combinations.')
+                
                 metacombos = p.map(tools.unique_combo, meta_iter)
                 p.close()
                 p.join()
@@ -315,15 +319,19 @@ class FullEnumeration:
                              if len(input) > 0]
             
             # Max number of combos to consider from 'and', 'or', and 'any'
-            print('Running the evaluation loop.')
+            if verbose:
+                print('Running the evaluation loop.')
+            
             num_runs = str(len(pairsum_input))
             with Pool(processes=self.n_jobs) as p:
                 for run_num, input in enumerate(pairsum_input):
                     batch_n = np.min([len(input), batch_keep_n])
-                    print('')
-                    print('Running batch ' + str(run_num + 1) + ' of ' + num_runs)
+                    if verbose:
+                        batch_mess = str(run_num + 1) + ' of ' + num_runs
+                        print('')
+                        print('Running batch ' + batch_mess)
                     
-                    if show_progress:
+                    if progress_bars:
                         input = tqdm.tqdm(input)
                     
                     # Calculating f1 score for each of the combo sums
