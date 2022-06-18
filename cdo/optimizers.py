@@ -450,7 +450,7 @@ class FullEnumeration:
         rp.set(xlim=(0, 1), ylim=(0, 1))
         rp.fig.set_tight_layout(True)
         rp.set_xlabels(xlab)
-        rp.set_ylabels(xlab)        
+        rp.set_ylabels(ylab)        
         
         plt.show()
         
