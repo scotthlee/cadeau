@@ -8,14 +8,14 @@ import math
 import tqdm
 import ortools
 
-from multiprocessing import Pool, Array
+from multiprocessing import Pool, Array, shared_memory
 from copy import deepcopy
 from matplotlib import pyplot as plt
 from ortools.linear_solver import pywraplp
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from matplotlib import pyplot as plt
-from itertools import combinations, permutations
+from itertools import combinations, permutations, islice
 
 from . import metrics, tools
 
@@ -40,6 +40,7 @@ metric_dict = {
         'ylab': 'Informedness'
     }
 }
+
 
 
 class FeaturePruner:
@@ -160,8 +161,9 @@ class FeaturePruner:
 
 class FullEnumeration:
     """A brute-force combinatorial optimizer. Hulk smash!"""
-    def __init__(self, n_jobs=None):
+    def __init__(self, n_jobs=None, share_memory=False):
         self.n_jobs = n_jobs
+        self.share_memory = share_memory
         return
     
     def fit(self, X, y,
@@ -170,6 +172,7 @@ class FullEnumeration:
             compound=False,
             use_reverse=False,
             top_n=None,
+            chunksize=1000,
             batch_keep_n=1000,
             write_full=False,
             csv_name='fe_results.csv',
@@ -214,29 +217,49 @@ class FullEnumeration:
         
         """
         # Separating the column names and values
-        n_symp = X.shape[1]
         symptom_list = X.columns.values
         self.var_names = symptom_list
         X = X.values.astype(np.uint8)
-
+        self.X = X
+        self.y = y
+                
         # Setting up a lookup dictionary for the metric names
         self.metric = metric
         fn1 = metric_dict[metric]['fn1']
         fn2 = metric_dict[metric]['fn2']
-
-        if not max_n:
-            max_n = n_symp
-
+        
+        # Optionally adding reversed versions of the columns
         if use_reverse:
             X_rev = -X + 1
             X = np.concatenate((X, X_rev), axis=1)
-
+        
+        # Setting max_n, if not already specified
+        if not max_n:
+            max_n = n_symp
+        
+        # Optionally copying the data into shared memory
+        if self.share_memory:
+            shm_x = shared_memory.SharedMemory(name='predictors',
+                                               create=True, 
+                                               size=X.nbytes)
+            shm_y = shared_memory.SharedMemory(name='outcome',
+                                               create=True,
+                                               size=y.nbytes)
+            X_sh = np.ndarray(X.shape, 
+                              dtype=X.dtype, 
+                              buffer=shm_x.buf)
+            y_sh = np.ndarray(y.shape,
+                              dtype=y.dtype,
+                              buffer=shm_y.buf)
+            X_sh[:] = X[:]
+            y_sh[:] = y[:]
+            
         # Setting up the combinations
         n_symp = X.shape[1]
-        col_combos = [list(combinations(range(1, n_symp + 1), i)) 
-                    for i in range(1, max_n + 1)]
-
+        n_vals = list(range(1, max_n + 1))
+        
         # Dropping impossible symptom pairings
+        """
         if use_reverse:
             clashes = [[i, i + n_symp] for i in range(n_symp)]
             keepers = [[np.sum([c[0] in l and c[1] in l
@@ -246,36 +269,49 @@ class FullEnumeration:
             col_combos = [[c for j, c in enumerate(combos) if keepers[i][j]]
                         for i, combos in enumerate(col_combos)]
             symptom_list += ['no_' + s for s in symptom_list]
-
-        # Getting the combo names
-        combo_names = [[' '.join([symptom_list[i] 
-                                  for i in np.array(c) - 1])
-                        for c in combos]
-                       for combos in col_combos]
-
+        """
+        
         # Running the simple search loop
         symp_out = []
-        score_fn = getattr(metrics, metric)
         if verbose:
             print('Evaluating the simple combinations.')
-
+        
         with Pool(processes=self.n_jobs) as p:
-            for i, combos in enumerate(col_combos):
-                c_out = []
-                X_combos = [X[:, np.array(c) - 1] for c in combos]
-                for m in range(len(combos[0])):
-                    inputs = [(y, np.array(np.array(np.sum(x, axis=1) > m,
-                                                      dtype=np.uint8) > 0, 
-                                             dtype=np.uint8),
-                               metric) for x in X_combos]
-                    res = np.array(p.starmap(metrics.score_set, inputs))
-                    mn = np.array([[m + 1, i + 1]] * res.shape[0])
-                    cols = np.array(combo_names[i]).reshape(-1, 1)
-                    c_out.append(np.concatenate([mn, cols, res], axis=1))
-                symp_out.append(np.concatenate(c_out, axis=0))
+            for n_val in n_vals:
+                for m in range(n_val):
+                    c_out = []
+                    combo_iter = combinations(range(n_symp), n_val)
+                    combos_remaining = True
+                    while combos_remaining:
+                        combos = list(islice(combo_iter, chunksize))
+                        if len(combos) == 0:
+                            combos_remaining = False
+                        else:
+                            if self.share_memory:
+                                inputs = [(c, m, X.shape, metric) 
+                                          for c in combos]
+                                res = p.starmap(metrics.slice_and_score, inputs)
+                            else:
+                                slices = [np.array(X[:, c].sum(1) > m, 
+                                                   dtype=np.uint8) 
+                                          for c in combos]
+                                inputs = [(y, s, metric) for s in slices]
+                                res = p.starmap(metrics.score_set, inputs)
+                            res = np.array(res)
+                            combo_names = [' '.join([symptom_list[i]
+                                                     for i in np.array(c)])
+                                           for c in combos]
+                            mn = np.array([[m + 1, n_val]] * res.shape[0])
+                            cols = np.array(combo_names).reshape(-1, 1)
+                            c_out.append(np.concatenate([mn, cols, res], 
+                                                        axis=1))
+                    symp_out.append(np.concatenate(c_out, axis=0))
             p.close()
             p.join()
-
+        
+        if self.share_memory:
+            self.clear_shared_memory()
+        
         results = pd.DataFrame(np.concatenate(symp_out),
                                columns=['m1', 'n1', 'rule1',
                                          fn1, fn2, metric])
@@ -401,6 +437,18 @@ class FullEnumeration:
         self.results['total_n'] = self.results.n1 + self.results.n2
         
         return
+    
+    def clear_shared_memory(self):
+        shm_x = shared_memory.SharedMemory(name='predictors',
+                                           create=False, 
+                                           size=self.X.nbytes)
+        shm_y = shared_memory.SharedMemory(name='outcome',
+                                           create=False,
+                                           size=self.y.nbytes)
+        shm_x.close()
+        shm_x.unlink()
+        shm_y.close()
+        shm_y.unlink()
     
     def plot(self, 
              metric=None, 

@@ -11,15 +11,17 @@ from cdo import metrics
 
 
 # Importing the original data
-records = pd.read_csv('data/test_data.csv')
+records = pd.read_csv('data/tb_data.csv')
 
 # Making them combined
-y = records.stroke.values
-X = records.iloc[:, records.columns != 'stroke']
+y = records.mtb.values.astype(np.uint8)
+X = records.iloc[:, records.columns != 'mtb'].fillna(0)
+for c in X.columns.values:
+    X[c] = X[c].astype(np.uint8)
 
 # Setting up a pruner to whittle down the variables
 pruner = ops.FeaturePruner()
-pruner.fit(X, y, factor=8)
+pruner.fit(X, y, factor=15)
 
 # Trying the different solvers on the simple problem
 start = time.time()

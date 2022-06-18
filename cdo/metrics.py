@@ -4,8 +4,14 @@ import pandas as pd
 
 from scipy.special import expit, erf
 from sklearn.metrics import confusion_matrix
+from multiprocessing import shared_memory
 
 from .tools import smash_log, zm_to_y, pair_sum, combo_sum
+
+
+fn_dict = {'j': ['sens', 'spec'],
+           'f1': ['sens', 'ppv'],
+           'mcc': ['j', 'mk']}
 
 
 def brier_score(targets, guesses):
@@ -169,9 +175,6 @@ def pair_score(X, c, mc, y, metric):
 
 def score_set(y, y_, metric, return_df=False):
     """Provides a small set of scores for a set of predictions."""
-    fn_dict = {'j': ['sens', 'spec'],
-               'f1': ['sens', 'ppv'],
-               'mcc': ['j', 'mk']}
     fn1 = globals()[fn_dict[metric][0]]
     fn2 = globals()[fn_dict[metric][1]]
     fn3 = globals()[metric]
@@ -184,6 +187,18 @@ def score_set(y, y_, metric, return_df=False):
     else:
         return scores
 
+
+def slice_and_score(c, m, xshape, metric='j'):
+    """Pulls X and y from shared memory and then scores a combination."""
+    X_buf = shared_memory.SharedMemory(name='predictors')
+    y_buf = shared_memory.SharedMemory(name='outcome')
+    X = np.ndarray(xshape, dtype=np.uint8, buffer=X_buf.buf)
+    y = np.ndarray((xshape[0],), dtype=np.uint8, buffer=y_buf.buf)
+    y_ = np.array(X[:, c].sum(1) > m, dtype=np.uint8)
+    scores = score_set(y, y_, metric)
+    X_buf.close()
+    y_buf.close()
+    return scores
 
 def risk_ratio(y, pred, round=2):
     """Calculates the risk ratio."""
