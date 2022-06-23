@@ -220,6 +220,7 @@ class FullEnumeration:
         symptom_list = X.columns.values
         self.var_names = symptom_list
         X = X.values.astype(np.uint8)
+        y = y.astype(np.uint8)
         self.X = X
         self.y = y
                 
@@ -290,7 +291,8 @@ class FullEnumeration:
                             if self.share_memory:
                                 inputs = [(c, m, X.shape, metric) 
                                           for c in combos]
-                                res = p.starmap(metrics.slice_and_score, inputs)
+                                res = p.starmap(metrics.shared_mem_score, 
+                                                inputs)
                             else:
                                 slices = [np.array(X[:, c].sum(1) > m, 
                                                    dtype=np.uint8) 

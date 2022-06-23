@@ -188,7 +188,7 @@ def score_set(y, y_, metric, return_df=False):
         return scores
 
 
-def slice_and_score(c, m, xshape, metric='j'):
+def shared_mem_score(c, m, xshape, metric='j'):
     """Pulls X and y from shared memory and then scores a combination."""
     X_buf = shared_memory.SharedMemory(name='predictors')
     y_buf = shared_memory.SharedMemory(name='outcome')
@@ -199,6 +199,7 @@ def slice_and_score(c, m, xshape, metric='j'):
     X_buf.close()
     y_buf.close()
     return scores
+
 
 def risk_ratio(y, pred, round=2):
     """Calculates the risk ratio."""
