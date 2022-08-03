@@ -27,9 +27,6 @@ setup(
     license='Apache 2.0',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
-        'Intended Audience :: Epidemiologists',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
     ],
