@@ -1,7 +1,39 @@
 # Kudos
 ## Optimizing case definitions for public health
+Kudos helps epidemiologists, statisticians, and other data-savvy public health practitioners build better case definitions. 
 
-**Template for clearance: This project serves as a template to aid projects in starting up and moving through clearance procedures. To start, create a new repository and implement the required [open practices](open_practices.md), train on and agree to adhere to the organization's [rules of behavior](rules_of_behavior.md), and [send a request through the create repo form](https://forms.office.com/Pages/ResponsePage.aspx?id=aQjnnNtg_USr6NJ2cHf8j44WSiOI6uNOvdWse4I-C2NUNk43NzMwODJTRzA4NFpCUk1RRU83RTFNVi4u) using language from this template as a Guide.**
+### Overview
+Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case. In public health, case definitions are most often used for reporting and surveillance, but (when appropriately developed) they may also be used in clinical medicine, for example, as screening rules for deciding when patients with a suspected illness should receive confirmatory testing, or as criteria for issuing a diagnosis when confirmatory testing is unavailable.
+
+The usual method for developing public health case definitions is by expert consensus, where a panel of physicians, epidemiologists, and other public health practitioners jointly decides on the structure, content, and application of a new rule. Because of their logical form, though, case definitions can also be approached as a kind of mathematical optimization problem, where the goal is to figure out which combination of symptoms best separates cases from non-cases. In this case, cases would be defined by their results on a gold-standard lab test for the disease (e.g., PCR or bacterial culture), and "best" would be defined by some measure of classification performance (e.g., accuracy or F-score) relative to the test results. 
+
+### Methods supported
+Kudos supports three combinatorial optimization methods: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions.
+
+
+## Getting Started
+### Installation
+The easiest way to install Kudos is with pip: `pip install kudos`. The package is available on PyPI, though, so you should be able to use any standard package manager to fetch the code and handle the installation. 
+
+### Software requirements
+The package was written in Python 3.8, but it should run fine with higher (but not lower) versions. The package requires a few standard dependencies, like `numpy`, `scikit-learn`, and `seaborn`, but it will check for those during installation and add them if they're missing.
+
+### Hardware
+Kudos is best run on a scientific workstation or cloud instance with a decent amount of RAM and lots of processors. If you're using something less substantial, the optimizers will still work, but you may need to use the `FeaturePruner` to whittle down your dataset  if it has a large number of predictors. Regardless of hardware, the `FullEnumeration` (i.e., brute-force search) can take a long time to run, so keep that in mind when setting up the optimization.
+
+## Using Kudos
+### Interactive
+Kudos is designed to be used interactively.
+
+### Command-line
+Coming soon.
+
+### Streamlit
+Coming soon.
+
+## References
+1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
+2. Reses HE, Fajans M, Lee SH, Heilig CM, Chu VT, Thornburg NJ, Christensen K, Bhattacharyya S, Fry A, Hall AJ, Tate JE. Performance of existing and novel surveillance case definitions for COVID-19 in household contacts of PCR-confirmed COVID-19. _BMC public health_. 2021 Dec;21(1):1-5.
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  Github is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software.
 
