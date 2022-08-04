@@ -1,7 +1,7 @@
 # Kudos
 ## Optimizing case definitions for public health
 ### Overview
-Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case). Whether for cliical or 
+Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case). Whether for clinical or surveillance use, these kinds of checklists are often 
 
 Kudos is a Python package that helps epidemiologists, statisticians, and other data-savvy public health practitioners build better case definitions. 
 
