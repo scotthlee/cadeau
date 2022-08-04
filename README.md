@@ -3,11 +3,11 @@
 ### What's it for?
 Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case. Kudos is a Python package that lets you develop and test these kinds of case definitions using combinatorial optimization.
 
-### How does it work?
-Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. In all cases, the solver will figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
-
 ### Who's it for?
 Kudos was written mostly with practicing epidmiologists in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
+
+### How does it work?
+Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. In all cases, the solver will figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
 
 ## Getting Started
 ### Installation
