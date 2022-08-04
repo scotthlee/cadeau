@@ -1,12 +1,14 @@
 # Kudos
 ## Optimizing case definitions for public health
-### Overview
-Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case). Whether for clinical or surveillance use, these kinds of checklists are often 
+Kudos helps epidemiologists, statisticians, and other data-savvy public health practitioners build better case definitions. 
 
-Kudos is a Python package that helps epidemiologists, statisticians, and other data-savvy public health practitioners build better case definitions. 
+### Overview
+Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case. In public health, case definitions are most often used for reporting and surveillance, but (when appropriately developed) they may also be used in clinical medicine, for example, as screening rules for deciding when patients with a suspected illness should receive confirmatory testing, or as criteria for issuing a diagnosis when confirmatory testing is unavailable.
+
+The usual method for developing public health case definitions is by expert consensus, where a panel of physicians, epidemiologists, and other public health practitioners jointly decides on the structure, content, and application of a new rule. Because of their logical form, though, case definitions can also be approached as a kind of mathematical optimization problem, where the goal is to figure out which combination of symptoms best separates cases from non-cases. In this case, cases would be defined by their results on a gold-standard lab test for the disease (e.g., PCR or bacterial culture), and "best" would be defined by some measure of classification performance (e.g., accuracy or F-score) relative to the test results. 
 
 ### Methods supported
-Kudos supports three combinatorial optimization methods: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding the optimal definition based on your data, and the third method is good for exploring the full range of possible definitions.
+Kudos supports three combinatorial optimization methods: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions.
 
 
 ## Getting Started
@@ -17,9 +19,17 @@ The easiest way to install Kudos is with pip: `pip install kudos`. The package i
 The package was written in Python 3.8, but it should run fine with higher (but not lower) versions. The package requires a few standard dependencies, like `numpy`, `scikit-learn`, and `seaborn`, but it will check for those during installation and add them if they're missing.
 
 ### Hardware
-Kudos is best run on a scientific workstation or cloud instance with a decent amount of RAM and lots of processors. If you're using something less substantial, the optimizers will still work, but you may need to use the `FeaturePruner` class in `optimizers` to whittle down your dataset  if it has a large number of predictors. Regardless of hardware, the `FullEnumeration` (i.e., brute-force search) can take a long time to run, so keep that in mind when setting up the optimization.
+Kudos is best run on a scientific workstation or cloud instance with a decent amount of RAM and lots of processors. If you're using something less substantial, the optimizers will still work, but you may need to use the `FeaturePruner` to whittle down your dataset  if it has a large number of predictors. Regardless of hardware, the `FullEnumeration` (i.e., brute-force search) can take a long time to run, so keep that in mind when setting up the optimization.
 
 ## Using Kudos
+### Interactive
+Kudos is designed to be used interactively.
+
+### Command-line
+Coming soon.
+
+### Streamlit
+Coming soon.
 
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
