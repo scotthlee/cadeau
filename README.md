@@ -16,7 +16,7 @@ The easiest way to install Kudos is with pip:
 
 `pip install kudos`
 
-The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation.
+The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. 
 
 ### Software requirements
 The package was written in Python 3.8, and because of some recent-ish changes to the `multiprocessing` package, it will not run on anything lower. It requires a few standard dependencies, like `numpy`, `scikit-learn`, and `seaborn`, but it will check for those during installation and add them if they're missing.
