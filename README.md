@@ -1,3 +1,4 @@
+[![PyPI version](https://badge.fury.io/py/kudos.svg)](https://badge.fury.io/py/kudos)
 # Kudos
 ## Overview
 ### What's it for?
