@@ -8,7 +8,7 @@ Public health case definitions often take the form of predictive checklists. The
 Kudos was written with epidemiologists, biostatisticians, and other data-savvy public health practitioners in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
 
 ### How does it work?
-Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (Zhang et al. 2021); nonlinear programming; and brute-force search (Reses et al. 2021). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. In all cases, the solver will figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
+Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (1); nonlinear programming; and brute-force search (2, 3). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. In all cases, the solver will figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
 
 ## Getting Started
 ### Installation
@@ -37,6 +37,7 @@ Coming soon.
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
 2. Reses HE, Fajans M, Lee SH, Heilig CM, Chu VT, Thornburg NJ, Christensen K, Bhattacharyya S, Fry A, Hall AJ, Tate JE. Performance of existing and novel surveillance case definitions for COVID-19 in household contacts of PCR-confirmed COVID-19. _BMC public health_. 2021 Dec;21(1):1-5.
+3. Lee S, Almendares O, Prince-Guerra JL, Heilig CM, Tate JE, Kirking HL. Performance of Existing and Novel Symptom-and Antigen Testing-Based COVID-19 Case Definitions in a Community Setting. _medRxiv_. 2022 Jan 1.
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  Github is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software.
 
