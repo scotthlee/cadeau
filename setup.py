@@ -12,15 +12,15 @@ from os import path
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-#with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    #long_description = f.read()
+with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
 
 setup(
     name='kudos',
     version='0.0.1',
     description='Tools for optimizing public health case definitions',
-    #long_description=long_description,
-    #long_description_content_type='text/markdown',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     url='https://github.com/scotthlee/kudos',
     author='Scott Lee',
     author_email='yle4@cdc.gov',
