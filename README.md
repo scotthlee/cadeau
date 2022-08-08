@@ -5,7 +5,7 @@
 Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case. Kudos is a Python package that helps you develop and test these kinds of case definitions using combinatorial optimization.
 
 ### Who it's for
-Kudos was written with epidemiologists, biostatisticians, and other data-savvy public health practitioners in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
+Kudos was written with epidemiologists, biostatisticians, data scientists, and other data-savvy public health practitioners in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
 
 ### How it works
 Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (1); nonlinear programming; and brute-force search (2, 3). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. All of them figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
@@ -18,7 +18,13 @@ The easiest way to install Kudos is with pip:
 pip install kudos
 ```
 
-The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. 
+The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. If you'd like to contribute, fork the package first, and then install the dependencies manually.
+
+```sh
+git clone https://github.com/YOURNAME/kudos.git
+cd kudos
+pip install -r requirements.txt
+```
 
 ### Software requirements
 The package was written in Python 3.8, and because of some recent-ish changes to the `multiprocessing` package, it will not run on anything lower. It requires a few standard dependencies, like `numpy`, `scikit-learn`, and `seaborn`, but it will check for those during installation and add them if they're missing.
@@ -64,18 +70,38 @@ Coming soon.
 ### Streamlit
 Coming soon.
 
-## FAQ
-1. **How do the linear prgorams decide case definition is the best?**
-The `IntegerProgram` needs a linear objective function to run, meaning it's limited to metrics that are linear combinations of the predictors and the candidate case definitions. [Youden's J index](https://en.wikipedia.org/wiki/Youden%27s_J_statistic) (sensitivity + specificity - 1) meets that criterion, and it's a reasonable measure of overall classification performance, so that's what we use. If you want to emphasize sensitivity more than specificity or vice-versa, you can change their weights with the `alpha` and `beta` parameters when you call `IntegerProgram.fit()`. Because it's a relaxed version of the integer program, the `NonlinearApproximation` uses this metric, as well. 
+## Frequently Asked Questions
+### Metrics
+1. **How do the linear programs decide which case definition is the best?**
+The `IntegerProgram` needs a linear objective function to run, meaning it's limited to metrics that are linear combinations of the predictors and the candidate case definitions. [Youden's J index](https://en.wikipedia.org/wiki/Youden%27s_J_statistic) (sensitivity + specificity - 1) meets that criterion, and it's a reasonable measure of overall classification performance, so that's what we use. Because it's a relaxed version of the integer program, the `NonlinearApproximation` uses this metric, as well. 
 
-2. **What about the full enumeration?**
-If you want to optimize a different metric than the J index, you can use the `FullEnumeration` instead of the LP-based optimizers. It will accept [F-score](https://en.wikipedia.org/wiki/F-score) or [Matthews correlation coefficient](https://en.wikipedia.org/wiki/Phi_coefficient) (MCC), in addition to J, as targets for sorting, pruning, and plotting. MCC has some theoretical support for being considered the "best" global measure of classification performance (4), but in many cases, the top 100 or so definitions will be the same regardless of which metric you choose.
+2. **What if I care more about sensitivity than specificity, or vice versa?**
+You can change how much weight each component of the J index receives by altering the with the `alpha` (sensitivity) and `beta` (specificity) parameters of the linear program you `.fit()`. 
+
+3. **What about the full enumeration?**
+If you want to optimize a different metric than the J index, you can use the `FullEnumeration` instead of the LP-based optimizers. It will accept [F-score](https://en.wikipedia.org/wiki/F-score) or [Matthews correlation coefficient](https://en.wikipedia.org/wiki/Phi_coefficient) (MCC), in addition to J, as targets for sorting, pruning, and plotting. 
+
+### Computing resources
+1. **How can I make the brute-force search run faster?**
+   * Whittle down your feature space. The `optimizers.FeaturePruner` is one way to do that, but standard variable-selection procedures (e.g., 
+   forward or backward selection) will also work.
+   * Try a lower value for `max_n`. The default is 5, which should work well in most cases.
+   * Turn off `use_reverse`, if it's on. Using it doubles the size of the feature space.
+   * Turn off `compound`, if it's on. Using it substantially increases the number of combinations to try.
+2. **How can I make the brute-force search use less memory?**
+   * Set `share_memory` to `True` when you initialize the `FullEnumeration` object. This keeps `multiprocessing` from passing copies of the
+   dataset to every process in the `Pool`. 
+   * Make sure `prune` is turned on. This limits the number of combinations saved at each step in the search.
+   * Use a smaller number for `batch_keep_n`. This decides how many combos to save when `prune` is turned on.
+   * Use fewer predictors. See the first answer to question #1 above.
+3. **How can I make the linear program run faster?**
+   * Try a lower value for `max_n`. The default is `None`, which will take the longest.
+   * Try a different solver. [OR-Tools](https://developers.google.com/optimization/introduction/python), which is what Kudos uses on the backend, has a few options available.
 
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
 2. Reses HE, Fajans M, Lee SH, Heilig CM, Chu VT, Thornburg NJ, Christensen K, Bhattacharyya S, Fry A, Hall AJ, Tate JE. Performance of existing and novel surveillance case definitions for COVID-19 in household contacts of PCR-confirmed COVID-19. _BMC public health_. 2021 Dec;21(1):1-5.
 3. Lee S, Almendares O, Prince-Guerra JL, Heilig CM, Tate JE, Kirking HL. Performance of Existing and Novel Symptom-and Antigen Testing-Based COVID-19 Case Definitions in a Community Setting. _medRxiv_. 2022 Jan 1.
-4. Chicco D, Jurman G. The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation. _BMC Genomcis._ 2020 Dec;21(1):1-3.
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  Github is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software.
 
