@@ -8,7 +8,7 @@ Public health case definitions often take the form of predictive checklists. The
 Kudos was written with epidemiologists, biostatisticians, and other data-savvy public health practitioners in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
 
 ### How does it work?
-Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (1); nonlinear programming; and brute-force search (2, 3). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. In all cases, the solver will figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
+Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (1); nonlinear programming; and brute-force search (2, 3). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. All of them figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
 
 ## Getting Started
 ### Installation
