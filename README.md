@@ -14,7 +14,9 @@ Kudos use three kinds of combinatorial optimization methods to develop case defi
 ### Installation
 The easiest way to install Kudos is with pip: 
 
-`pip install kudos`
+```sh
+pip install kudos
+```
 
 The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. 
 
@@ -22,11 +24,38 @@ The package is available on PyPI, so you can also use any standard package manag
 The package was written in Python 3.8, and because of some recent-ish changes to the `multiprocessing` package, it will not run on anything lower. It requires a few standard dependencies, like `numpy`, `scikit-learn`, and `seaborn`, but it will check for those during installation and add them if they're missing.
 
 ### Hardware
-Kudos is best run on a scientific workstation or cloud instance with a decent amount of RAM and lots of processors. If you're using something less substantial, the optimizers will still work, but you may need to use the `FeaturePruner` to whittle down your dataset  if it has a large number of predictors. Regardless of hardware, the `FullEnumeration` (i.e., brute-force search) can take a long time to run, so keep that in mind when setting up the optimization.
+Kudos is best run on a scientific workstation or cloud instance with a decent amount of RAM and lots of processors. If you're using something less substantial, the optimizers will still work, but you may need to whittle down your dataset first if it has a large number of predictors. Regardless of hardware, the `FullEnumeration` (i.e., brute-force search) can take a long time to run, so keep that in mind when setting up the optimization.
 
 ## Using Kudos
 ### Interactive
-Kudos is designed to be used interactively, offering users a variety of tools for 
+Kudos is designed to be used interactively. Let's say you have a dataset named `data` with an outcome `y` and some number of predictors `X`. Finding a good case definition is as easy as fitting one of the models in the `optimizers` module.
+
+```python
+import pandas as pd
+from optimizers import IntegerProgram
+
+data = pd.read_csv('data.csv')
+X = data[X_columns]
+y = data[y_column]
+
+ip = IntegerProgram()
+ip.fit(X, y)
+```
+
+Once the solver finishes, it saves the optimal definition in the `results` attribute.
+
+```python
+ip.results
+```
+
+Seeing who meets the case definition in a new batch of data is just as easy.
+
+```python
+new_data = pd.read_csv('new_data.csv')
+new_case = ip.predict(new_data[X_columns])
+```
+
+The other optimizers, `FullEnumeration` and `NonlinearApproximation`, have the same functionality, and `FullEnumeration` also lets you do some visualizations with the candidate case definitions. For more info, see the [demo notebook](demo.ipynb).
 
 ### Command-line
 Coming soon.
