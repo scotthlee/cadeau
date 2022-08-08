@@ -52,7 +52,8 @@ Seeing who meets the case definition in a new batch of data is just as easy.
 
 ```python
 new_data = pd.read_csv('new_data.csv')
-new_case = ip.predict(new_data[X_columns])
+new_X = new_data[X_columns]
+meets_definition = ip.predict(new_X)
 ```
 
 The other optimizers, `FullEnumeration` and `NonlinearApproximation`, have the same functionality, and `FullEnumeration` also lets you do some visualizations with the candidate case definitions. For more info, see the [demo notebook](demo.ipynb).
