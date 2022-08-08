@@ -1,13 +1,13 @@
 [![PyPI version](https://badge.fury.io/py/kudos.svg)](https://badge.fury.io/py/kudos)
 # Kudos
 ## Overview
-### What's it for?
+### What it's for
 Public health case definitions often take the form of predictive checklists. The WHO, for example, defines [influenza-like illness](https://www.who.int/teams/global-influenza-programme/surveillance-and-monitoring/case-definitions-for-ili-and-sari) (ILI) as an acute respistoray infection with fever, cough, and an onset in the past 10 days; and the CDC defines a probable case of [pertussis (whooping cough)](https://ndc.services.cdc.gov/case-definitions/pertussis-2020/) as the presence of paroxysms of coughing, inspiratory whoop, post-coughing vomiting, or apnea for at least 2 weeks (or fewer than 2 weeks with exposure to a known case. Kudos is a Python package that helps you develop and test these kinds of case definitions using combinatorial optimization.
 
-### Who's it for?
+### Who it's for
 Kudos was written with epidemiologists, biostatisticians, and other data-savvy public health practitioners in mind. That being said, the code is subject-matter-agnostic, and so it can be used by anyone looking to build high-performance predictive checklists.
 
-### How does it work?
+### How it works
 Kudos use three kinds of combinatorial optimization methods to develop case definitions: linear programming (1); nonlinear programming; and brute-force search (2, 3). The first two methods are good for quickly finding a near-optimal definition based on your data, and the third method is good for exploring the full range of possible definitions. All of them figure out which combination of predictors (often symptoms) has the best classification performance relative to the reference standard you've specified (often a pathogen-specific like test like PCR or viral culture).
 
 ## Getting Started
@@ -63,10 +63,18 @@ Coming soon.
 ### Streamlit
 Coming soon.
 
+## FAQ
+1. **How do the linear prgorams decide case definition is the best?**
+The `IntegerProgram` needs a linear objective function to run, meaning it's limited to metrics that are linear combinations of the predictors and the candidate case definitions. [Youden's J index](https://en.wikipedia.org/wiki/Youden%27s_J_statistic) (sensitivity + specificity - 1) meets that criterion, and it's a reasonable measure of overall classification performance, so that's what we use. If you want to emphasize sensitivity more than specificity or vice-versa, you can change their weights with the `alpha` and `beta` parameters when you call `IntegerProgram.fit()`. Because it's a relaxed version of the integer program, the `NonlinearApproximation` uses this metric, as well. 
+
+2. **What about the full enumeration?**
+If you want to optimize a different metric than the J index, you can use the `FullEnumeration` instead of the LP-based solvers. It will accept [F-score](https://en.wikipedia.org/wiki/F-score) or [Matthews correlation coefficient](https://en.wikipedia.org/wiki/Phi_coefficient) (MCC), in addition to J, as targets for sorting, pruning, and plotting. MCC has some theoretical support for being considered the "best" global measure of classification performance (4), but in many cases, the top 100 or so definitions will be the same regardless of which metric you choose.
+
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
 2. Reses HE, Fajans M, Lee SH, Heilig CM, Chu VT, Thornburg NJ, Christensen K, Bhattacharyya S, Fry A, Hall AJ, Tate JE. Performance of existing and novel surveillance case definitions for COVID-19 in household contacts of PCR-confirmed COVID-19. _BMC public health_. 2021 Dec;21(1):1-5.
 3. Lee S, Almendares O, Prince-Guerra JL, Heilig CM, Tate JE, Kirking HL. Performance of Existing and Novel Symptom-and Antigen Testing-Based COVID-19 Case Definitions in a Community Setting. _medRxiv_. 2022 Jan 1.
+4. Chicco D, Jurman G. The advantages of the Matthews correlation coefficient (MCC) over F1 score and accuracy in binary classification evaluation. _BMC Genomcis._ 2020 Dec;21(1):1-3.
 
 **General disclaimer** This repository was created for use by CDC programs to collaborate on public health related projects in support of the [CDC mission](https://www.cdc.gov/about/organization/mission.htm).  Github is not hosted by the CDC, but is a third party website used by CDC and its partners to share information and collaborate on software.
 
