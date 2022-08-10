@@ -18,7 +18,7 @@ The easiest way to install Kudos is with pip:
 pip install kudos
 ```
 
-The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. If you'd like to contribute, fork the package first, and then install the dependencies manually.
+The package is available on PyPI, so you can also use any standard package manager to fetch the code and handle the installation. If you'd like to contribute, fork the package first, clone it, and then install the dependencies manually.
 
 ```sh
 git clone https://github.com/YOURNAME/kudos.git
