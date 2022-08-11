@@ -97,7 +97,7 @@ If you want to optimize a different metric than the J index, you can use the `Fu
 3. **How can I make the linear program run faster?**
    * Try a lower value for `max_n`. The default is `None`, which will take the longest.
    * Try a different solver. [OR-Tools](https://developers.google.com/optimization/introduction/python), which is what Kudos uses on the 
-   * backend, has a few options available.
+   backend, has a few options available.
 
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
