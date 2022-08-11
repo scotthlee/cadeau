@@ -14,8 +14,20 @@ fn_dict = {'j': ['sens', 'spec'],
            'mcc': ['j', 'mk']}
 
 
-def brier_score(targets, guesses):
-    """Calculates Brier score."""
+def brier_score(y, y_):
+    """Calculates Brier score.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A vector of class labels.
+    y_ : 1d array-like
+      A vector of predicted probabilities.
+    
+    Returns
+    ----------
+    brier score: float
+    """
     n_classes = len(np.unique(targets))
     assert n_classes > 1
     if n_classes == 2:
@@ -30,18 +42,60 @@ def brier_score(targets, guesses):
 
 
 def mcc(y, y_, undef_val=0):
-    """Calculates Matthews Correlation Coefficient."""
+    """Calculates Matthews Correlation Coefficient.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    undef_val : float, default=0.0
+      What to return when the metric is undefined. Options are 0 or NaN.
+    
+    Returns
+    ----------
+    mcc : float
+    """
     prod = j(y, y_) * j(y_, y) * mk(y, y_) * mk(y_, y)
     return prod ** (1/4) if prod != 0 else undef_val
 
 
 def f1(y, y_):
-    """Alternative call for f_score()."""
+    """Alternative call for f_score() where b equals 1.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A 1d binary vector of class labels.
+    y_ : array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    f1-score : float
+    """
     return f_score(y, y_, b=1)
 
 
 def f_score(y, y_, b=1, undef_val=0):
-    """Calculates F-score."""
+    """Calculates F-score.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    b : int, default=1
+      The degree of f-score.
+    undef_val : float, default=0.0
+      What to return when the score is undefined. Options are 0.0 and NaN.
+    
+    Returns
+    ----------
+    f-score : float
+    """
     se = sens(y, y_)
     pv = ppv(y, y_)
     if se + pv != 0:
@@ -51,49 +105,91 @@ def f_score(y, y_, b=1, undef_val=0):
 
 
 def sens(y, y_):
-    """Calculates sensitivity, or recall."""
+    """Calculates sensitivity, or recall.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    sensitivity : float.
+    """
     tp = np.sum((y ==1) & (y_ == 1))
     return tp / y.sum()
 
 
 def spec(y, y_):
-    """Calculates specificity, or 1 - FPR."""
+    """Calculates specificity, or 1 - FPR.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    specificity : float
+    """
     tn = np.sum((y == 0) & (y_ == 0))
     return tn / np.sum(y == 0)
 
 
 def ppv(y, y_):
-    """Calculates positive predictive value, or precision."""
+    """Calculates positive predictive value, or precision.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    ppv : float
+    """
     tp = np.sum((y == 1) & (y_ == 1))
     return tp / y_.sum()
 
 
 def npv(y, y_):
-    """Calculates negative predictive value."""
+    """Calculates negative predictive value.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    npv : float
+    """
     tn = np.sum((y == 0) & (y_ == 0))
     return tn / np.sum(y_ == 0)
 
 
-def sens_exp(z, xp, B=100):
-    """Approximates sensitivity, or true positive rate, using the smash_log()
-    function.
-    """
-    m = z[-1]
-    z = z[:-1]
-    return smash_log(np.dot(xp, z) - m, B=B).sum() / xp.shape[0]
-
-
-def spec_exp(z, xn, B=100):
-    """Approximates specificity, or 1 minus FPR, using the smash_log() 
-    function.
-    """
-    m = z[-1]
-    z = z[:-1]
-    return 1 - smash_log(np.dot(xn, z) - m, B=B).sum() / xn.shape[0]
-
-
 def mk(y, y_):
-    """Calculates markedness, or PPV + NPV - 1."""
+    """Calculates markedness, or PPV + NPV - 1.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of class labels.
+    y_ : 1d array-like
+      A binary vector of predicted class labels.
+    
+    Returns
+    ----------
+    markedness : float.
+    """
     return ppv(y, y_) + npv(y, y_) - 1
 
 
@@ -107,9 +203,72 @@ def j(y, y_, a=1, b=1):
     return a*sens + b*spec - 1
 
 
+def sens_exp(z, xp, B=100):
+    """Approximates sensitivity, or true positive rate, using the smash_log()
+    function.
+    
+    Parameters
+    ----------
+    z : 1d array-like
+      A binary variable choice vector.
+    xp : 2d array-like
+      A binary matrix of observations for the true positives.
+    B : int, default=100
+      The "smash factor", i.e., the multiplier for x in the logistic funciton.
+    
+    Returns
+    ----------
+    sensitivity (approx) : float
+    """
+    m = z[-1]
+    z = z[:-1]
+    return smash_log(np.dot(xp, z) - m, B=B).sum() / xp.shape[0]
+
+
+def spec_exp(z, xn, B=100):
+    """Approximates specificity, or 1 minus FPR, using the smash_log() 
+    function.
+    
+    Parameters
+    ----------
+    z : 1d array-like
+      A binary variable choice vector.
+    xn : 2d array-like
+      A binary matrix of observations for the true negatives.
+    B : int, default=100
+      The "smash factor", i.e., the multiplier for x in the logistic funciton.
+    
+    Returns
+    ----------
+    specificity (approx) : float
+    """
+    m = z[-1]
+    z = z[:-1]
+    return 1 - smash_log(np.dot(xn, z) - m, B=B).sum() / xn.shape[0]
+
+
 def j_lin(z, m, X, y):
     """Calculates Youden's J index as a linear combination of a variable 
-    choice vector, two variable matrices, and m."""
+    choice vector, two variable matrices, and m.
+    
+    
+    Parameters
+    ----------
+    z : 1d array-like
+      A binary variable choice vector.
+    m : int
+      Minimum row sum for X needed for the corresponding predicted class
+      labels y_ to be 1.
+    X : 2d array-like
+      A binary matrix of observations.
+    y : 1d array-like
+      A binary vector of class labels. 
+      
+    
+    Returns
+    ----------
+    j : float
+    """
     z = np.round(z)
     y_ = zm_to_y(z, m, X)
     return j(y, y_)
@@ -118,6 +277,23 @@ def j_lin(z, m, X, y):
 def j_lin_comp(z_mat, m_vec, X, y):
     """Calculates Youden's J index from the N matrix and M vector specifying
     a given compound rule. Both must be binary.
+    
+    Parameters
+    ----------
+    z_mat : 2d array-like
+      An array of 1d variable choice vectors.
+    m_vec : int
+      A vector with the minimum row sums for X needed for the predicted
+      class labels y_ to be 1. Must correspond to the variable ordering in 
+      z_mat.
+    X : 2d array-like
+      A binary matrix of observations.
+    y : 1d array-like
+      A binary vector of class labels. 
+    
+    Returns
+    ----------
+    j : float
     """
     guesses = np.array([zm_to_y(z_mat[:, i], m_vec[i], X)
                         for i in range(z_mat.shape[1])])
@@ -127,8 +303,25 @@ def j_lin_comp(z_mat, m_vec, X, y):
 
 
 def j_exp(z, xp, xn, a=1, b=1):
-    """Calculates Youden's J index for a single m-of-n rule using the 
+    """Approximates Youden's J index for a single m-of-n rule using the 
     parameters of a solved LP (z) and the smash_log() function.
+    
+    Parameters
+    ----------
+    z : 1d array-like
+      A binary variable choice vector.
+    xp : 2d array-like
+      Binary matrix of observations for the true positives.
+    xn : 2d array-like
+      Binary matrix of observatinos for the true negatives.
+    a : float, default=1.0
+      Weight for sensitivity (TPR) in calculating J.
+    b : float, default=1.0
+      Weight for specificity (1 - FPR) in calculating J.
+    
+    Returns
+    ----------
+    j : float
     """
     m = z[-1]
     z = smash_log(z[:-1] - .5)
@@ -138,8 +331,29 @@ def j_exp(z, xp, xn, a=1, b=1):
 
 
 def j_exp_comp(z, xp, xn, c=2, a=1, b=1, th=0):
-    """Calculates Youden's J index for a compound m-of-n rule using the
+    """Approximates Youden's J index for a compound m-of-n rule using the
     parameters of a solved LP (z) and the smash_log() function.
+    
+    Parameters
+    ----------
+    z : 1d array-like
+      A binary variable choice vector.
+    xp : 2d array-like
+      Binary matrix of observations for the true positives.
+    xn : 2d array-like
+      Binary matrix of observatinos for the true negatives.
+    c : int, default=2
+      Number of sub-rules in the compound rule.
+    a : float, default=1.0
+      Weight for sensitivity (TPR) in calculating J.
+    b : float, default=1.0
+      Weight for specificity (1 - FPR) in calculating J.
+    th : float, default=0.0
+      No idea.
+    
+    Returns
+    ----------
+    j : float
     """
     # Setting things up
     s = xp.shape[1]
@@ -164,9 +378,30 @@ def j_exp_comp(z, xp, xn, c=2, a=1, b=1, th=0):
     return -1 * weighted_j + mn_penalty
 
 
-def pair_score(X, c, mc, y, metric):
-    """Scores a pair of sets of columns."""
-    ps = pair_sum(X, c, mc)
+def pair_score(X, combo_cols, combo_mins, y, metric):
+    """Scores a pair of sets of columns.
+    
+    Parameters
+    ----------
+    X : 2d array-like
+      Binary matrix of observations.
+    combo_cols : list of 1d array-like
+      A list of sets of column numbers specifying the component variables of a
+      sub-rule.
+    combo_mins : 1d array-like
+      The minimum 
+    y : 1d array-like
+      A binary vector of true class labels.
+    metric : {'j', 'f1', 'mcc'}
+      Which metric to use as the base metric. 
+    
+    Returns
+    ----------
+    and_scores, or_scores : list of float arrays
+      The ``and_scores`` are the metrics for when both combos must be met, and
+      the ``or_scores`` are for when only one of the combos must be met. 
+    """
+    ps = pair_sum(X, combo_cols, combo_mins)
     cs = combo_sum(ps)
     and_scores = score_set(y, cs[:, 0], metric)
     or_scores = score_set(y, cs[:, 1], metric)
@@ -174,7 +409,25 @@ def pair_score(X, c, mc, y, metric):
 
 
 def score_set(y, y_, metric, return_df=False):
-    """Provides a small set of scores for a set of predictions."""
+    """Provides a small set of scores for a set of predictions.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+      A binary vector of the true class labels.
+    y_ : 1d array-like
+      A binary vector of the predicted class labels.
+    metric : {'j', 'f1', 'mcc'}
+      The base metric for evaluating the predictions.
+    return_df : bool, default=False
+      Whether to return the scores as a pandas DataFrame.
+    
+    Returns
+    ----------
+    scores : list of floats
+      The first component, second component, and base metric scores for the 
+      predictions.
+    """
     fn1 = globals()[fn_dict[metric][0]]
     fn2 = globals()[fn_dict[metric][1]]
     fn3 = globals()[metric]
@@ -188,35 +441,28 @@ def score_set(y, y_, metric, return_df=False):
         return scores
 
 
-def shared_mem_score(c, m, xshape, metric='j'):
-    """Pulls X and y from shared memory and then scores a combination."""
+def shared_mem_score(combo_cols, m, xshape, metric='j'):
+    """Pulls X and y from shared memory and then scores a combination.
+    
+    Parameters
+    ----------
+    combo_cols : 1d
+    
+    Returns
+    ----------
+    scores : list of floats
+      The first component, second component, and base metric scores for the 
+      predictions.
+    """
     X_buf = shared_memory.SharedMemory(name='predictors')
     y_buf = shared_memory.SharedMemory(name='outcome')
     X = np.ndarray(xshape, dtype=np.uint8, buffer=X_buf.buf)
     y = np.ndarray((xshape[0],), dtype=np.uint8, buffer=y_buf.buf)
-    y_ = np.array(X[:, c].sum(1) > m, dtype=np.uint8)
+    y_ = np.array(X[:, combo_cols].sum(1) > m, dtype=np.uint8)
     scores = score_set(y, y_, metric)
     X_buf.close()
     y_buf.close()
     return scores
-
-
-def risk_ratio(y, pred, round=2):
-    """Calculates the risk ratio."""
-    props = np.array(prop_table(y, pred, round=None))
-    rr = props[1, 1] / props[1, 0]
-    if round is not None:
-        rr = np.round(rr, round)
-    return rr
-
-
-def odds_ratio(y, pred, round=2):
-    """Calculates the odds ratio."""
-    tab = np.array(pd.crosstab(y, pred))
-    OR = (tab[0, 0]*tab[1, 1]) / (tab[1, 0]*tab[0, 1])
-    if round is not None:
-        OR = np.round(OR, round)
-    return OR
 
 
 def clf_metrics(true, 

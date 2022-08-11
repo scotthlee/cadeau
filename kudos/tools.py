@@ -61,9 +61,10 @@ def row_sums(c, min=1):
     return np.array(sums >= min, dtype=np.uint8)
 
 
-def pair_sum(X, c, min=(1, 1)):
-    a = row_sums(X[:, c[0]], min=min[0])
-    b = row_sums(X[:, c[1]], min=min[1])
+def pair_sum(X, combo_cols, combo_mins=(1, 1)):
+    """"""
+    a = row_sums(X[:, combo_cols[0]], min=combo_mins[0])
+    b = row_sums(X[:, combo_cols[1]], min=combo_mins[1])
     return (a, b)
 
 

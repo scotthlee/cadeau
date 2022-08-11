@@ -1,3 +1,6 @@
+"""Functions and classes for statistical inference, mostly by way of 
+bootstrapping.
+"""
 import pandas as pd
 import numpy as np
 import os
@@ -12,11 +15,40 @@ from .tools import *
 from .metrics import *
 
 
-def threshold(probs, cutoff=.5):
+def threshold(probs, cutoff=0.5):
+    """Applies a decision threshold to a vector of probabilities.
+    
+    Parameters
+    ----------
+    probs : array-like
+      The vector of probabilities.
+    cutoff : float, default=0.5
+      The decision threshold.
+    
+    Returns
+    ----------
+    A np.uint8 vector of binary class predictions.
+    """
     return np.array(probs >= cutoff).astype(np.uint8)
 
 
-def mcnemar_test(true, pred, cc=True):
+def mcnemar_test(targets, guesses, cc=True):
+    """Performs McNemar's chi-squared test.
+    
+    Parameters
+    ----------
+    targets : array-like
+      The true binary class labels.
+    guesses : array-like
+      The predicted binary class labels.
+    cc : bool, default=True
+      Whether to perform the test with a continuity correction.
+    
+    Returns
+    ----------
+    A pandas DataFrame with the counts for the off-diagonals ('b', 'c'),
+    the value of the test statistic ('stat'), and the p-value ('pval').
+    """
     cm = confusion_matrix(true, pred)
     b = int(cm[0, 1])
     c = int(cm[1, 0])
@@ -31,179 +63,131 @@ def mcnemar_test(true, pred, cc=True):
     return out
 
 
-def jackknife_metrics(targets, 
-                      guesses, 
-                      average='weighted'):
-    # Replicates of the dataset with one row missing from each
-    rows = np.array(list(range(targets.shape[0])))
+def average_pvals(p_vals, 
+                  w=None, 
+                  method='harmonic',
+                  smooth_val=None):
+    """Uses either a harmonic mean or Fisher's method to average p-values.
+    
+    Parameters
+    ----------
+    p_vals : array-like
+      The p-values to be averaged.
+    w : array-like, default=None
+      An optional array of weights to use for averaging.
+    method : str, default='harmonic'
+      Method for averaging the p-values. Options are 'harmonic', which 
+      takes their harmonic mean, or 'fisher', which uses Fisher's method.
+    smooth : float, default=None
+      Optional smoothing value to be added to the p-values before averaging.
+    
+    Returns
+    ----------
+    The average p-value according to the specified method.
+    """
+    if smooth_val:
+        p = p_vals + smooth_val
+    else:
+        p = deepcopy(p_vals)
+    if method == 'harmonic':
+        if w is None:
+            w = np.repeat(1 / len(p), len(p))
+        p_avg = 1 / np.sum(w / p)
+    elif method == 'fisher':
+        stat = -2 * np.sum(np.log(p))
+        p_avg = 1 - chi2(df=1).cdf(stat)
+    return p_avg
+
+
+def jackknife_sample(X, by=None):
+    """Returns list of a jackknife samples of a dataset.
+    
+    Parameters
+    ----------
+    X : array-like
+      The dataset to be sampled.
+    by : array-like, default=None
+      A vector specifying which group an observation belongs to. Used for 
+      generating cluster/block bootstrap samples.
+    
+    Returns
+    ----------
+    The jackknife samples, i.e., a list of list of row numbers, where each 
+    sublist sl[i] is the full list of rows numbers minus the ith row number.
+    """
+    if by:
+        groups = np.unique(by)
+        rows = np.where([by == g for g in groups])[0]
+        rows = np.array(flatten(rows))
+    else:
+        rows = np.array(list(range(targets.shape[0])))
+    
     j_rows = [np.delete(rows, row) for row in rows]
 
-    # using a pool to get the metrics across each
-    scores = [clf_metrics(targets[idx],
-                          guesses[idx],
-                          average=average) for idx in j_rows]
-    scores = pd.concat(scores, axis=0)
-    means = scores.mean()
+    rows = np.array(list(range(X.shape[0])))
+    j_rows = [np.delete(rows, row) for row in rows]
     
-    return scores, means
+    return j_rows
 
 
-def invert_BCA(q, b, acc, lower=True):
-    if np.isnan(q):
-        return q
-    if np.any(q >= 1):
-        q /= 100
-    z = norm.ppf(q)
-    numer = z - 2*b - z*b*acc - b**2*acc
-    denom = 1 + b*acc + z*acc
-    if lower:
-        return 2 * norm.cdf(numer / denom)
+def boot_sample(X,
+                by=None,
+                size=None,
+                seed=None:
+    """Samples row indices with replacement, with the option to sample 
+    by a separate variable.
+    
+    Parameters
+    ----------
+    X : array-like
+      The dataset to be sampled.
+    by : array-like, default=None
+      A vector specifying which group an observation belongs to. Used for 
+      generating cluster/block bootstrap samples.
+    size : int, default=None
+      The size of the sample. By default, this is the number of observations
+      in X (e.g., len(X) for lists, or X.shape[0] for np.arrays).
+    seed : int, default=None
+      Seed for the random number generator. If unspecified, one will be 
+      randomly selected from the range (1, 1e6).
+    
+    Returns
+    ----------
+    An np.array of row indices specifying the bootstrap sample.
+    """
+    # Setting the random states for the samples
+    if seed is None:
+        seed = np.random.randint(1, 1e6, 1)[0]
+    np.random.seed(seed)
+    
+    # Getting the sample size
+    if size is None:
+        size = X.shape[0]
+    
+    # Sampling across groups, if group is unspecified
+    if by is None:
+        np.random.seed(seed)
+        idx = range(size)
+        boot = np.random.choice(idx,
+                                size=size,
+                                replace=True)
+    
+    # Sampling by group, if group has been specified
     else:
-        return 2 * (1 - norm.cdf(numer / denom))
-
-
-def BCA_pval(bca, null=0.0):
-    scores = bca.scores
-    n_cols = bca.scores.shape[1]
+        levels = np.unique(by)
+        n_levels = len(levels)
+        level_rows = [np.where(by == level)[0]
+                     for level in levels]
+        row_dict = dict(zip(levels, level_rows))
+        boot = np.random.choice(levels,
+                                size=n_levels, 
+                                replace=True)
+        obs = flatten([row_dict[b] for b in boot])
+        boot = np.array(obs)
     
-    # Making the vector of null values
-    if type(null) == type(0.0):
-        null = np.array([null] * n_cols)
-    
-    # Figuring out which nulls exist in the bootstrap data
-    good_nulls = []
-    for i in range(n_cols):
-        col = scores.iloc[:, i]
-        good_nulls.append(col.min() <= null[i] <= col.max())
-    
-    # Getting the percentile for each null
-    null_qs = np.array([percentileofscore(bca.scores.iloc[:, i], null[i]) 
-               if good_nulls[i] else np.nan for i in range(n_cols)]) / 100
-    
-    # Figuring out whether to look at the lower or upper quantile
-    lower = [q <= .5 if not np.isnan(q) else q for q in null_qs]
-    
-    # Getting the p-value associated with each null percentile
-    pvals = np.array([invert_BCA(null_qs[i],
-                                 bca.b[i],
-                                 bca.acc[i],
-                                 lower=lower[i])
-                      for i in range(n_cols)])
-    
-    return pvals, good_nulls, null_qs, lower
+    return boot
 
 
-def boot_stat_cis(stat,
-                  jacks,
-                  boots,
-                  a=0.05,
-                  exp=False,
-                  method="bca",
-                  interpolation="nearest",
-                  transpose=True,
-                  outcome_axis=1,
-                  stat_axis=2):
-    # Renaming because I'm lazy
-    j = jacks
-    n = len(boots)
-    
-    # Calculating the confidence intervals
-    lower = (a / 2) * 100
-    upper = 100 - lower
-
-    # Making sure a valid method was chosen
-    methods = ["pct", "diff", "bca"]
-    assert method in methods, "Method must be pct, diff, or bca."
-
-    # Calculating the CIs with method #1: the percentiles of the
-    # bootstrapped statistics
-    if method == "pct":
-        cis = np.nanpercentile(boots,
-                               q=(lower, upper),
-                               interpolation=interpolation,
-                               axis=0)
-        cis = pd.DataFrame(cis.transpose(),
-                           columns=["lower", "upper"],
-                           index=colnames)
-
-    # Or with method #2: the percentiles of the difference between the
-    # obesrved statistics and the bootstrapped statistics
-    elif method == "diff":
-        diffs = stat - boots
-        percents = np.nanpercentile(diffs,
-                                    q=(lower, upper),
-                                    interpolation=interpolation,
-                                    axis=0)
-        lower_bound = pd.Series(stat_vals + percents[0])
-        upper_bound = pd.Series(stat_vals + percents[1])
-        cis = pd.concat([lower_bound, upper_bound], axis=1)
-        cis = cis.set_index(stat.index)
-
-    # Or with method #3: the bias-corrected and accelerated bootstrap
-    elif method == "bca":
-        # Calculating the bias-correction factor
-        n_less = np.sum(boots < stat, axis=0)
-        p_less = n_less / n
-        z0 = norm.ppf(p_less)
-
-        # Fixing infs in z0
-        z0[np.where(np.isinf(z0))[0]] = 0.0
-
-        # Estiamating the acceleration factor
-        diffs = j[1] - j[0]
-        numer = np.sum(np.power(diffs, 3))
-        denom = 6 * np.power(np.sum(np.power(diffs, 2)), 3/2)
-
-        # Getting rid of 0s in the denominator
-        zeros = np.where(denom == 0)[0]
-        for z in zeros:
-            denom[z] += 1e-6
-
-        # Finishing up the acceleration parameter
-        acc = numer / denom
-
-        # Calculating the bounds for the confidence intervals
-        zl = norm.ppf(a / 2)
-        zu = norm.ppf(1 - (a / 2))
-        lterm = (z0 + zl) / (1 - acc * (z0 + zl))
-        uterm = (z0 + zu) / (1 - acc * (z0 + zu))
-        ql = norm.cdf(z0 + lterm) * 100
-        qu = norm.cdf(z0 + uterm) * 100
-
-        # Returning the CIs based on the adjusted quantiles;
-        # I know this code is hideous
-        if len(boots.shape) > 2:
-            n_outcomes = range(boots.shape[outcome_axis])
-            n_vars = range(boots.shape[stat_axis])
-            cis = np.array([
-                [np.nanpercentile(boots[:, i, j],
-                                  q =(ql[i][j], 
-                                      qu[i][j]),
-                                  axis=0) 
-                                  for i in n_outcomes]
-                for j in n_vars
-            ])
-        else:
-            n_stats = range(len(ql))
-            cis = np.array([
-                np.nanpercentile(boots[:, i],
-                                 q=(ql[i], qu[i]),
-                                 interpolation=interpolation,
-                                 axis=0) 
-                for i in n_stats])
-        
-        # Optional exponentiation for log-link models
-        if exp:
-            cis = np.exp(cis)
-        
-        # Optional transposition
-        if transpose:
-            cis = cis.transpose()
-
-    return cis
-
-
-# Calculates bootstrap confidence intervals for an estimator
 class boot_cis:
     def __init__(
         self,
@@ -211,13 +195,12 @@ class boot_cis:
         guesses,
         n=100,
         a=0.05,
-        group=None,
+        sample_by=None,
         method="bca",
         interpolation="nearest",
         average='weighted',
         mcnemar=False,
-        seed=10221983,
-        undef_val=0):
+        seed=10221983):
         # Converting everything to NumPy arrays, just in case
         stype = type(pd.Series([0]))
         if type(targets) == stype:
@@ -229,8 +212,7 @@ class boot_cis:
         stat = clf_metrics(targets,
                            guesses,
                            average=average,
-                           mcnemar=mcnemar,
-                           undef_val=undef_val).transpose()
+                           mcnemar=mcnemar).transpose()
 
         # Pulling out the column names to pass to the bootstrap dataframes
         colnames = list(stat.index.values)
@@ -238,7 +220,7 @@ class boot_cis:
         # Making an empty holder for the output
         scores = pd.DataFrame(np.zeros(shape=(n, stat.shape[0])),
                               columns=colnames)
-
+        
         # Setting the seed
         if seed is None:
             seed = np.random.randint(0, 1e6, 1)
@@ -247,14 +229,13 @@ class boot_cis:
 
         # Generating the bootstrap samples and metrics
         boots = [boot_sample(targets, 
-                             by=group, 
+                             by=sample_by,
                              seed=seed) for seed in seeds]
-        scores = [clf_metrics(targets[b], 
-                              guesses[b], 
-                              average=average,
-                              undef_val=undef_val) for b in boots]
+        score_input = [(targets[b], guesses[b]) for b in boots]
+        with Pool() as p:
+            scores = p.starmap(clf_metrics, score_input)
+        
         scores = pd.concat(scores, axis=0)
-        self.scores = scores
 
         # Calculating the confidence intervals
         lower = (a / 2) * 100
@@ -352,70 +333,6 @@ class boot_cis:
 
         return
 
-
-def average_pvals(p_vals, 
-                  w=None, 
-                  method='harmonic',
-                  smooth=True,
-                  smooth_val=1e-7):
-    if smooth:
-        p = p_vals + smooth_val
-    else:
-        p = deepcopy(p_vals)
-    if method == 'harmonic':
-        if w is None:
-            w = np.repeat(1 / len(p), len(p))
-        p_avg = 1 / np.sum(w / p)
-    elif method == 'fisher':
-        stat = -2 * np.sum(np.log(p))
-        p_avg = 1 - chi2(df=1).cdf(stat)
-    return p_avg
-
-
-def jackknife_sample(X):
-    rows = np.array(list(range(X.shape[0])))
-    j_rows = [np.delete(rows, row) for row in rows]
-    return j_rows
-
-
-def boot_sample(df,
-                by=None,
-                size=None,
-                seed=None,
-                return_df=False):
-    
-    # Setting the random states for the samples
-    if seed is None:
-        seed = np.random.randint(1, 1e6, 1)[0]
-    np.random.seed(seed)
-    
-    # Getting the sample size
-    if size is None:
-        size = df.shape[0]
-    
-    # Sampling across groups, if group is unspecified
-    if by is None:
-        np.random.seed(seed)
-        idx = range(size)
-        boot = np.random.choice(idx,
-                                size=size,
-                                replace=True)
-    
-    # Sampling by group, if group has been specified
-    else:
-        levels = np.unique(by)
-        n_levels = len(levels)
-        level_ids = [np.where(by == level)[0]
-                     for level in levels]
-        boot = [np.random.choice(ids, size=len(ids), replace=True)
-                for ids in level_ids]
-        boot = np.concatenate(boot).ravel()
-    
-    if not return_df:
-        return boot
-    else:
-        return df.iloc[boot, :]
-    
 
 class diff_boot_cis:
     def __init__(self,
@@ -523,29 +440,23 @@ class diff_boot_cis:
         return
 
 
-def grid_metrics(targets,
-                 guesses,
-                 step=.01,
-                 min=0.0,
-                 max=1.0,
-                 by='f1',
-                 average='binary',
-                 counts=True):
-    cutoffs = np.arange(min, max, step)
-    if len((guesses.shape)) == 2:
-        if guesses.shape[1] == 1:
-            guesses = guesses.flatten()
-        else:
-            guesses = guesses[:, 1]
-    if average == 'binary':
-        scores = []
-        for i, cutoff in enumerate(cutoffs):
-            threshed = threshold(guesses, cutoff)
-            stats = clf_metrics(targets, threshed)
-            stats['cutoff'] = pd.Series(cutoff)
-            scores.append(stats)
+def jackknife_metrics(targets, 
+                      guesses,
+                      sample_by=None, 
+                      average='weighted'):
+    # Replicates of the dataset with one row missing from each
+    j_rows = jackknife_sample(targets, by=sample_by)
     
-    return pd.concat(scores, axis=0)
+    # using a pool to get the metrics across each
+    score_input = [(targets[idx], guesses[idx]) for idx in j_rows]
+    with Pool() as p:
+        scores = p.starmap(clf_metrics, score_input)
+    
+    scores = pd.concat(scores, axis=0)
+    means = scores.mean()
+    
+    return scores, means
+
 
 
 def merge_cis(c, round=4, mod_name=''):
