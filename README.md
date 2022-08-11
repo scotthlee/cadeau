@@ -1,4 +1,4 @@
-[![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org/downloads/release/python-3810/) [![PyPI version](https://badge.fury.io/py/kudos.svg)](https://badge.fury.io/py/kudos)
+[![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org/downloads/release/python-3810/) [![PyPI version](https://badge.fury.io/py/kudos.svg)](https://badge.fury.io/py/kudos) [![DOI](https://zenodo.org/badge/468874577.svg)](https://zenodo.org/badge/latestdoi/468874577)
 # Kudos
 ## Overview
 ### What it's for
