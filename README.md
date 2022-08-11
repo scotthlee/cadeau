@@ -81,7 +81,7 @@ You can change how much weight each component of the J index receives by alterin
 3. **What about the full enumeration?**
 If you want to optimize a different metric than the J index, you can use the `FullEnumeration` instead of the LP-based optimizers. It will accept [F-score](https://en.wikipedia.org/wiki/F-score) or [Matthews correlation coefficient](https://en.wikipedia.org/wiki/Phi_coefficient) (MCC), in addition to J, as targets for sorting, pruning, and plotting. 
 
-### Computing resources
+### Compute
 1. **How can I make the brute-force search run faster?**
    * Whittle down your feature space. The `optimizers.FeaturePruner` is one way to do that, but standard variable-selection procedures (e.g., 
    forward or backward selection) will also work.
@@ -96,7 +96,8 @@ If you want to optimize a different metric than the J index, you can use the `Fu
    * Use fewer predictors. See the first answer to question #1 above.
 3. **How can I make the linear program run faster?**
    * Try a lower value for `max_n`. The default is `None`, which will take the longest.
-   * Try a different solver. [OR-Tools](https://developers.google.com/optimization/introduction/python), which is what Kudos uses on the backend, has a few options available.
+   * Try a different solver. [OR-Tools](https://developers.google.com/optimization/introduction/python), which is what Kudos uses on the 
+   * backend, has a few options available.
 
 ## References
 1. Zhang H, Morris Q, Ustun B, Ghassemi M. Learning optimal predictive checklists. _Advances in Neural Information Processing Systems_. 2021 Dec 6;34:1215-29.
