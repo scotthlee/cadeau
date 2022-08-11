@@ -26,13 +26,13 @@ pruner.fit(X, y, factor=15)
 # Trying the different solvers on the simple problem
 start = time.time()
 ip = ops.IntegerProgram()
-ip.fit(X, y)
+ip.fit(pruner.X, y)
 end = time.time()
 ip_time = end - start
 
 start = time.time()
 nola = ops.NonlinearApproximation()
-nola.fit(X, y)
+nola.fit(pruner.X, y)
 end = time.time()
 nola_time = end - start
 
