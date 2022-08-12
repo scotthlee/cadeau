@@ -42,10 +42,26 @@ metric_dict = {
 }
 
 
-
 class FeaturePruner:
     """A wrapper for sklearn models that can be used to whittle down the 
     feature space for large problems.
+    
+    Parameters
+    ----------
+    model_type : str, default='rf'
+        The kind of model to use as the pruner. Options are a random forest 
+        ('rf'), a gradient boosting classifier ('gbc'), and a logistic
+        regression with L1 ('l1'), L2 ('l2'), and L1+L2 ('elasticnet') 
+        penalties.
+    n_jobs : int, default=-1
+        n_jobs parameter to pass to sklearn models. -1 uses all processes.
+    n_estimators : int, default=1000
+        n_estimators parameter to pass to sklearn.ensemble models.
+    l1_ratio : float in (0, 1), default=0.5
+        Blending parameter for the L!/L2 penalties in elasticnet.
+    other_args : dict, default=None
+        Dictionary of other args for the base model.
+    
     """
     def __init__(self,
                  model_type='rf',
@@ -53,28 +69,6 @@ class FeaturePruner:
                  n_estimators=1000,
                  l1_ratio=0.5,
                  other_args=None):
-        """Initializes the pruner.
-        
-        Parameters
-        ----------
-        model_type : str, default='rf'
-          The kind of model to use as the pruner. Options are a random forest 
-          ('rf'), a gradient boosting classifier ('gbc'), and a logistic
-          regression with L1 ('l1'), L2 ('l2'), and L1+L2 ('elasticnet') 
-          penalties.
-        n_jobs : int, default=-1
-          n_jobs parameter to pass to sklearn models. -1 uses all processes.
-        n_estimators : int, default=1000
-          n_estimators parameter to pass to sklearn.ensemble models.
-        l1_ratio : float in (0, 1), default=0.5
-          Blending parameter for the L!/L2 penalties in elasticnet.
-        other_args : dict, default=None
-          Dictionary of other args for the base model.
-        
-        Returns
-        ----------
-        A FeaturePruner object with a base model ready to fit.
-        """
         tree_dict = {'rf': 'RandomForestClassifier',
                     'gbc': 'GradientBoostingClassifier'}
         self.tree_mods = ['rf', 'gbc']
@@ -105,15 +99,15 @@ class FeaturePruner:
         Parameters
         ----------
         X : pd.DataFrame
-          The array of predictors.
+            The array of predictors.
         y : array-like
-          The array of targets for prediction.
+            The array of targets for prediction.
         factor : float or int, default=0.5
-          Either the proportion or number of original features to keep.
+            Either the proportion or number of original features to keep.
         return_x : bool, default=False
-          Whether to return the pruned predictors after fitting.
+            Whether to return the pruned predictors after fitting.
         other_args : dict, default=None
-          A dict of other args to pass to the base model fit() function.
+            A dict of other args to pass to the base model fit() function.
         
         Returns
         ----------
@@ -160,7 +154,19 @@ class FeaturePruner:
 
 
 class FullEnumeration:
-    """A brute-force combinatorial optimizer. Hulk smash!"""
+    """A brute-force combinatorial optimizer. Hulk smash!
+    
+    Parameters
+    ----------
+    n_jobs : int, default=None
+      Number of processes for the ``multiprocessing.Pool``. Default is None, 
+      which uses them all.
+    share_memory : bool, default=False
+      Whether to store the X and y arrays in shared memory.
+    
+    Returns
+    -------
+    """
     def __init__(self, n_jobs=None, share_memory=False):
         self.n_jobs = n_jobs
         self.share_memory = share_memory
@@ -173,7 +179,7 @@ class FullEnumeration:
             use_reverse=False,
             top_n=None,
             chunksize=1000,
-            batch_keep_n=1000,
+            batch_keep_n=100,
             write_full=False,
             csv_name='fe_results.csv',
             prune=True,
@@ -184,22 +190,30 @@ class FullEnumeration:
         
         Parameters
         ----------
+        X : 2d array-like
+            A binary matrix of predictors.
+        y : 1d array-like
+            A binary matrix of true class labels.
         max_n : int, default=5
             The maximum allowable combination size.
         metric : str, default='j'
             The classification metric to be optimized. Options are 'j', 'f1',
             or 'mcc'.
         compound : bool, default=False
-            Whether to search compound combinations. Performance will \
-            probably be higher
+            Whether to search compound combinations. May lead to higher 
+            classification performance, but the search will take much longer 
+            to run.
         use_reverse : bool, default=False
-            Whether to include reversed symptoms (e.g., 'not X'); this will \
+            Whether to include reversed symptoms (e.g., 'not X'); this will 
             double the size of the feature space.
-        top_n : int, default=100
-            Number of top-performing combinations to save.
-        batch_keep_n : int, default=15
-            Number of top combos to keep from each batch. Only the top \
-            combinations will be kept as candidates for the final cut. Usually \
+        top_n : int, default=None
+            Number of top-performing combinations to save. The default is None,
+            which saves them all.
+        chunk_size : int, default=1000
+            Size of chunks to pass to the ``multiprocessing.Pool``.
+        batch_keep_n : int, default=100
+            Number of top combos to keep from each batch. Only the top 
+            combinations will be kept as candidates for the final cut. Usually 
             only applies for compound combinations.
         write_full : bool, default=True
             Whether to write the full (pre-pruned) set of results to disk. If 
@@ -211,9 +225,13 @@ class FullEnumeration:
             Maximum amount of a metric a combination in a batch can lag the max 
             from previous batches before being discarded. Only applies when 
             prune is set to True. 
+        progress_bars : bool, default=True
+            Whether to show progress bars during the compound search.
+        verbose : bool, default=False
+            Whether to narrate the search process.
         
         Returns
-        ----------
+        -------
         
         """
         # Separating the column names and values
@@ -441,6 +459,7 @@ class FullEnumeration:
         return
     
     def clear_shared_memory(self):
+        """Clears any objects from ``shared_memory``."""
         shm_x = shared_memory.SharedMemory(name='predictors',
                                            create=False, 
                                            size=self.X.nbytes)
@@ -459,9 +478,28 @@ class FullEnumeration:
              hue=None,
              grid_style='darkgrid',
              palette='crest',
-             font_scale=1,
-             add_hull=False):
-        """Plots combinations in the selected metric's space."""
+             font_scale=1):
+        """Plots combinations in the selected metric's space.
+        
+        Parameters
+        ----------
+        metric : {'j', 'f1', 'mcc'}, default=None
+            (Optional) base metric to use for plotting, if different from the 
+            metric supplied during ``.fit()``.
+        mark_best : bool, default=True
+            Whether to mark the top-performing combination on the plot.
+        separate_n : bool, default=False
+            Whether to draw a separate plot for each value of n.
+        hue : str, defaut=None
+            Variable to use for semantic coloring.
+        grid_style : str, default='darkgrid'
+            Seaborn grid_style.
+        palette : str, default='crest'
+            Seaborn color palette.
+        font_scale : float, default=1.0
+            Font scaling parameter.
+        
+        """
         sns.set_style('darkgrid')
         sns.set(font_scale=font_scale)
         cp = sns.color_palette(palette)
@@ -527,26 +565,21 @@ class NonlinearApproximation:
         
         Parameters
         ----------
-          max_n : int, default=5
-            The maximum allowable combination size.
-          metric : str, default='j'
-            The classification metric to be optimized.
-          metric_mode : str, default='max'
-            Whether to minimize ('min') or maximimze ('max') the metric.
-          compound : bool, default=False
-            Whether to search compound combinations. Performance will \
-            probably be higher
-          use_reverse: bool, default=False
-            Whether to include reversed symptoms (e.g., 'not X'); this will \
-            double the size of the feature space.
-          n_jobs : int, default=-1
-            Number of jobs for multiprocessing. -1 runs them all.
-          top_n : int, default=100
-            Number of top-performing combinations to save.
-          batch_keep_n: int, default=15
-            Number of top combos to keep from each batch. Only the top \
-            combinations will be kept as candidates for the final cut. Usually \
-            only applies for compound combinations.
+        X : 2d array-like
+            A binary matrix of predictors.
+        y : 1d array-like
+            A binary matrix of true class labels.
+        max_m : int, default=None
+            (Optional) limit on the m parameter.
+        max_n : int, default=5
+            (Optional) limit on the n parameter.
+        min_sens : float, default=None
+            (Optional) minimum sensitivity required.
+        min_spec : float, default=None
+            (Optional) minimum specificity required.
+        print_score : bool, default=True
+            Whether to print the score from the solution rule.
+        
         """
         # Setting up the problem
         self.var_names = X.columns.values
@@ -663,10 +696,25 @@ class NonlinearApproximation:
             self.solution = opt.x.round()
             self.m = self.solution[-Nc:]
             self.z = self.solution[:-Nc].reshape((Ns, Nc), order='F')
-            return metrics.j_lin_comp(self.z, self.m, X, y)
+            
+            if print_score:
+                score = metrics.j_lin_comp(self.z, self.m, X, y)
+                mess = 'The best score was '
+                print(mess + str(np.round(score, 4)))
     
     def predict(self, X):
-        """Returns the optimal guesses for a new set of data."""
+        """Returns the optimal guesses for a new set of data.
+        
+        Parameters
+        ----------
+        X : 2d array-like
+            A binary matrix of predictors.
+        
+        Returns
+        -------
+        preds : 1d array of dtype np.uint8
+            A binary array of predictions.
+        """
         return tools.zm_to_y(self.z, self.m, X)
 
 
@@ -792,7 +840,18 @@ class IntegerProgram:
         self.results = pd.concat([rule_cols, score_cols], axis=1)
     
     def predict(self, X):
-        """Returns the optimal guesses for a new set of data."""
+        """Returns the optimal guesses for a new set of data.
+        
+        Parameters
+        ----------
+        X : 2d array-like
+            A binary matrix of predictors.
+        
+        Returns
+        -------
+        preds : 1d array of dtype np.uint8
+            The predictions.
+        """
         return tools.zm_to_y(self.z, self.m, X)
     
                 

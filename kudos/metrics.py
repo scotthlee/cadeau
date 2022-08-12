@@ -26,15 +26,16 @@ def brier_score(y, y_):
     
     Returns
     ----------
-    brier score: float
+    bs : float
+        The Brier score.
     """
-    n_classes = len(np.unique(targets))
+    n_classes = len(np.unique(y))
     assert n_classes > 1
     if n_classes == 2:
-        bs = np.sum((guesses - targets)**2) / targets.shape[0]
+        bs = np.sum((y_ - y)**2) / y.shape[0]
     else:
-        y = onehot_matrix(targets)
-        row_diffs = np.diff((guesses, y), axis=0)[0]
+        y = onehot_matrix(y)
+        row_diffs = np.diff((y_, y), axis=0)[0]
         squared_diffs = row_diffs ** 2
         row_sums = np.sum(squared_diffs, axis=1) 
         bs = row_sums.mean()
@@ -42,20 +43,25 @@ def brier_score(y, y_):
 
 
 def mcc(y, y_, undef_val=0):
-    """Calculates Matthews Correlation Coefficient.
+    """Calculates Matthews Correlation Coefficient. There are two ways of doing
+    this: one based on the counts in the confusion matrix, and one based on two
+    component metrics, Youden's J index and markedness. This function 
+    implements the latter, returning the score as the product of the component 
+    metrics on the given problem (y, y_) and on its dual (y_, y).
     
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     undef_val : float, default=0.0
-      What to return when the metric is undefined. Options are 0 or NaN.
+        What to return when the metric is undefined. Options are 0 or NaN.
     
     Returns
-    ----------
+    -------
     mcc : float
+        Matthews correlation coefficient, or phi.
     """
     prod = j(y, y_) * j(y_, y) * mk(y, y_) * mk(y_, y)
     return prod ** (1/4) if prod != 0 else undef_val
@@ -67,13 +73,14 @@ def f1(y, y_):
     Parameters
     ----------
     y : 1d array-like
-      A 1d binary vector of class labels.
+        A 1d binary vector of class labels.
     y_ : array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
-    f1-score : float
+    -------
+    f1 : float
+        The F1 score.
     """
     return f_score(y, y_, b=1)
 
@@ -84,17 +91,18 @@ def f_score(y, y_, b=1, undef_val=0):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     b : int, default=1
-      The degree of f-score.
+        The degree of f-score.
     undef_val : float, default=0.0
-      What to return when the score is undefined. Options are 0.0 and NaN.
+        What to return when the score is undefined. Options are 0.0 and NaN.
     
     Returns
-    ----------
-    f-score : float
+    -------
+    f : float
+        The f-score.
     """
     se = sens(y, y_)
     pv = ppv(y, y_)
@@ -110,13 +118,14 @@ def sens(y, y_):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
-    sensitivity : float.
+    -------
+    sens : float.
+        Sensitivity, AKA recall or the true positive rate (TPR).
     """
     tp = np.sum((y ==1) & (y_ == 1))
     return tp / y.sum()
@@ -128,13 +137,14 @@ def spec(y, y_):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
-    specificity : float
+    -------
+    spec : float
+        Specificity, or 1 - FPR.
     """
     tn = np.sum((y == 0) & (y_ == 0))
     return tn / np.sum(y == 0)
@@ -146,13 +156,14 @@ def ppv(y, y_):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
+    -------
     ppv : float
+        Positive predictive value.
     """
     tp = np.sum((y == 1) & (y_ == 1))
     return tp / y_.sum()
@@ -164,37 +175,57 @@ def npv(y, y_):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
+    -------
     npv : float
+        Negative predictive value.
     """
     tn = np.sum((y == 0) & (y_ == 0))
     return tn / np.sum(y_ == 0)
 
 
 def mk(y, y_):
-    """Calculates markedness, or PPV + NPV - 1.
+    """Calculates markedness, or PPV + NPV - 1. One of the two component 
+    metrics for Matthews correlation coefficient, along with the J index.
     
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of class labels.
+        A binary vector of class labels.
     y_ : 1d array-like
-      A binary vector of predicted class labels.
+        A binary vector of predicted class labels.
     
     Returns
-    ----------
-    markedness : float.
+    -------
+    mk : float.
+        Markedness, or PPV + NPV minus 1.
     """
     return ppv(y, y_) + npv(y, y_) - 1
 
 
 def j(y, y_, a=1, b=1):
-    """Calculates Youden's J index from two binary vectors."""
+    """Calculates Youden's J index from two binary vectors.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+        Binary vector of true class labels.
+    y_ : 1d array-like
+        Binary vector of predicted class labels.
+    a : float, default=1.0
+        (Optional) weight for sensitivity.
+    b : float, default=1.0
+        (Optional) weight for specificity.
+    
+    Returns
+    -------
+    j : float
+        Youden's J index.
+    """
     c = a + b
     a = a / c * 2
     b = b / c * 2
@@ -210,15 +241,16 @@ def sens_exp(z, xp, B=100):
     Parameters
     ----------
     z : 1d array-like
-      A binary variable choice vector.
+        A binary variable choice vector.
     xp : 2d array-like
-      A binary matrix of observations for the true positives.
+        A binary matrix of observations for the true positives.
     B : int, default=100
-      The "smash factor", i.e., the multiplier for x in the logistic funciton.
+        The "smash factor", i.e., the multiplier for x in the logistic funciton.
     
     Returns
-    ----------
-    sensitivity (approx) : float
+    -------
+    sens (approx) : float
+        Sensitivity, AKA recall or true positive rate (TPR), approximately.
     """
     m = z[-1]
     z = z[:-1]
@@ -232,15 +264,16 @@ def spec_exp(z, xn, B=100):
     Parameters
     ----------
     z : 1d array-like
-      A binary variable choice vector.
+        A binary variable choice vector.
     xn : 2d array-like
-      A binary matrix of observations for the true negatives.
+        A binary matrix of observations for the true negatives.
     B : int, default=100
-      The "smash factor", i.e., the multiplier for x in the logistic funciton.
+        The "smash factor", i.e., the multiplier for x in the logistic funciton.
     
     Returns
-    ----------
-    specificity (approx) : float
+    -------
+    spec (approx) : float
+        Specificity, or 1 - FPR, approximately.
     """
     m = z[-1]
     z = z[:-1]
@@ -251,23 +284,22 @@ def j_lin(z, m, X, y):
     """Calculates Youden's J index as a linear combination of a variable 
     choice vector, two variable matrices, and m.
     
-    
     Parameters
     ----------
     z : 1d array-like
-      A binary variable choice vector.
+        A binary variable choice vector.
     m : int
-      Minimum row sum for X needed for the corresponding predicted class
-      labels y_ to be 1.
+        Minimum row sum for X needed for the corresponding predicted class
+        labels y_ to be 1.
     X : 2d array-like
-      A binary matrix of observations.
+        A binary matrix of observations.
     y : 1d array-like
-      A binary vector of class labels. 
+        A binary vector of class labels. 
       
-    
     Returns
-    ----------
+    -------
     j : float
+        Youden's J index.
     """
     z = np.round(z)
     y_ = zm_to_y(z, m, X)
@@ -281,19 +313,20 @@ def j_lin_comp(z_mat, m_vec, X, y):
     Parameters
     ----------
     z_mat : 2d array-like
-      An array of 1d variable choice vectors.
+        An array of 1d variable choice vectors.
     m_vec : int
-      A vector with the minimum row sums for X needed for the predicted
-      class labels y_ to be 1. Must correspond to the variable ordering in 
-      z_mat.
+        A vector with the minimum row sums for X needed for the predicted
+        class labels y_ to be 1. Must correspond to the variable ordering in 
+        z_mat.
     X : 2d array-like
-      A binary matrix of observations.
+        A binary matrix of observations.
     y : 1d array-like
-      A binary vector of class labels. 
+        A binary vector of class labels. 
     
     Returns
-    ----------
+    -------
     j : float
+        Youden's J index.
     """
     guesses = np.array([zm_to_y(z_mat[:, i], m_vec[i], X)
                         for i in range(z_mat.shape[1])])
@@ -309,19 +342,20 @@ def j_exp(z, xp, xn, a=1, b=1):
     Parameters
     ----------
     z : 1d array-like
-      A binary variable choice vector.
+        A binary variable choice vector.
     xp : 2d array-like
-      Binary matrix of observations for the true positives.
+        Binary matrix of observations for the true positives.
     xn : 2d array-like
-      Binary matrix of observatinos for the true negatives.
+        Binary matrix of observatinos for the true negatives.
     a : float, default=1.0
-      Weight for sensitivity (TPR) in calculating J.
+        Weight for sensitivity (TPR) in calculating J.
     b : float, default=1.0
-      Weight for specificity (1 - FPR) in calculating J.
+        Weight for specificity (1 - FPR) in calculating J.
     
     Returns
-    ----------
+    -------
     j : float
+        Youden's J index, approximately.
     """
     m = z[-1]
     z = smash_log(z[:-1] - .5)
@@ -337,23 +371,24 @@ def j_exp_comp(z, xp, xn, c=2, a=1, b=1, th=0):
     Parameters
     ----------
     z : 1d array-like
-      A binary variable choice vector.
+        A binary variable choice vector.
     xp : 2d array-like
-      Binary matrix of observations for the true positives.
+        Binary matrix of observations for the true positives.
     xn : 2d array-like
-      Binary matrix of observatinos for the true negatives.
+        Binary matrix of observatinos for the true negatives.
     c : int, default=2
-      Number of sub-rules in the compound rule.
+        Number of sub-rules in the compound rule.
     a : float, default=1.0
-      Weight for sensitivity (TPR) in calculating J.
+        Weight for sensitivity (TPR) in calculating J.
     b : float, default=1.0
-      Weight for specificity (1 - FPR) in calculating J.
+        Weight for specificity (1 - FPR) in calculating J.
     th : float, default=0.0
-      No idea.
+        No idea.
     
     Returns
-    ----------
+    -------
     j : float
+        Youden's J Index, approximately.
     """
     # Setting things up
     s = xp.shape[1]
@@ -384,22 +419,22 @@ def pair_score(X, combo_cols, combo_mins, y, metric):
     Parameters
     ----------
     X : 2d array-like
-      Binary matrix of observations.
+        Binary matrix of observations.
     combo_cols : list of 1d array-like
-      A list of sets of column numbers specifying the component variables of a
-      sub-rule.
+        A list of sets of column numbers specifying the component variables of a
+        sub-rule.
     combo_mins : 1d array-like
-      The minimum 
+        The minimum 
     y : 1d array-like
-      A binary vector of true class labels.
+        A binary vector of true class labels.
     metric : {'j', 'f1', 'mcc'}
-      Which metric to use as the base metric. 
+        Which metric to use as the base metric. 
     
     Returns
-    ----------
+    -------
     and_scores, or_scores : list of float arrays
-      The ``and_scores`` are the metrics for when both combos must be met, and
-      the ``or_scores`` are for when only one of the combos must be met. 
+        The ``and_scores`` are the metrics for when both combos must be met, and
+        the ``or_scores`` are for when only one of the combos must be met. 
     """
     ps = pair_sum(X, combo_cols, combo_mins)
     cs = combo_sum(ps)
@@ -414,19 +449,19 @@ def score_set(y, y_, metric, return_df=False):
     Parameters
     ----------
     y : 1d array-like
-      A binary vector of the true class labels.
+        A binary vector of the true class labels.
     y_ : 1d array-like
-      A binary vector of the predicted class labels.
+        A binary vector of the predicted class labels.
     metric : {'j', 'f1', 'mcc'}
-      The base metric for evaluating the predictions.
+        The base metric for evaluating the predictions.
     return_df : bool, default=False
-      Whether to return the scores as a pandas DataFrame.
+        Whether to return the scores as a pandas DataFrame.
     
     Returns
-    ----------
+    -------
     scores : list of floats
-      The first component, second component, and base metric scores for the 
-      predictions.
+        The first component, second component, and base metric scores for the 
+        predictions.
     """
     fn1 = globals()[fn_dict[metric][0]]
     fn2 = globals()[fn_dict[metric][1]]
@@ -449,10 +484,10 @@ def shared_mem_score(combo_cols, m, xshape, metric='j'):
     combo_cols : 1d
     
     Returns
-    ----------
+    -------
     scores : list of floats
-      The first component, second component, and base metric scores for the 
-      predictions.
+        The first component, second component, and base metric scores for the 
+        predictions.
     """
     X_buf = shared_memory.SharedMemory(name='predictors')
     y_buf = shared_memory.SharedMemory(name='outcome')
@@ -465,8 +500,7 @@ def shared_mem_score(combo_cols, m, xshape, metric='j'):
     return scores
 
 
-def clf_metrics(true, 
-                pred,
+def clf_metrics(y, y_,
                 average='weighted',
                 preds_are_probs=False,
                 cutpoint=0.5,
@@ -476,32 +510,62 @@ def clf_metrics(true,
                 mcnemar=False,
                 argmax_axis=1,
                 undef_val=0):
-    '''Runs basic diagnostic stats on binary (only) predictions'''
+    """Generates a panel of classification metrics for a predictor.
+    
+    Parameters
+    ----------
+    y : 1d array-like
+        A vector of true class labels.
+    y_ : 1d or 2d array-like
+        A vector of predicted class labels or class probabilities.
+    average : {'weighted', 'macro', 'micro'}, default='weighted'
+        How to average metrics for multiclass problems.
+    preds_are_probs : bool, default=False
+        Whether the predictions are labels or probabilities.
+    cutpoint : float, default=0.5
+        Decision threshold to apply to the probabilities.
+    mod_name : str, default=None
+        (Optional) name for the rule or model that generated the predictions.
+    round : int, default=4
+        Rounding parameter for the results.
+    round_pval : bool, default=False
+        Whether to round p-values from McNemar's chi-squared test.
+    mcnemar : bool, default=False
+        Whether to display p-values form McNemar's chi-squared test.
+    argmax_axis : int, default=1
+        Axis parameter for argmaxing multiclass probabilities.
+    undef_val : float, default=0.0
+        Return value for metrics when they're undefined.
+    
+    Returns
+    -------
+    results : pd.DataFrame
+        A pandas DataFrame of classification metrics.
+    """
     # Converting pd.Series to np.array
     stype = type(pd.Series([0]))
-    if type(pred) == stype:
-        pred = pred.values
-    if type(true) == stype:
-        true = true.values
+    if type(y_) == stype:
+        y_ = y_.values
+    if type(y) == stype:
+        y = y.values
     
     # Optional exit for doing averages with multiclass/label inputs
-    if len(np.unique(true)) > 2:
+    if len(np.unique(y)) > 2:
         # Getting binary metrics for each set of results
-        codes = np.unique(true)
+        codes = np.unique(y)
         
         # Argmaxing for when we have probabilities
         if preds_are_probs:
-            auc = roc_auc_score(true,
-                                pred,
+            auc = roc_auc_score(y, y_,
                                 average=average,
                                 multi_class='ovr')
-            brier = brier_score(true, pred)
-            pred = np.argmax(pred, axis=argmax_axis)
+            brier = brier_score(y, y_)
+            y_ = np.argmax(y_, axis=argmax_axis)
         
         # Making lists of the binary predictions (OVR)    
-        y = [np.array([doc == code for doc in true], dtype=np.uint8)
+        y = [np.array([doc == code for doc in y], dtype=np.uint8)
              for code in codes]
-        y_ = [np.array([doc == code for doc in pred], dtype=np.uint8)
+        y_ = [np.array([doc == code for doc in y_], dtype=np.uint8)
               for code in codes]
         
         # Getting the stats for each set of binary predictions
@@ -531,8 +595,8 @@ def clf_metrics(true,
         # Rounding things off
         out = out.round(round)
         count_cols = [
-                      'tp', 'fp', 'tn', 'fn', 'true_prev',
-                      'pred_prev', 'prev_diff'
+            'tp', 'fp', 'tn', 'fn', 'true_prev',
+            'pred_prev', 'prev_diff'
         ]
         out[count_cols] = out[count_cols].round()
         
@@ -543,15 +607,15 @@ def clf_metrics(true,
     
     # Thresholding the probabilities, if provided
     if preds_are_probs:
-        auc = roc_auc_score(true, pred)
-        brier = brier_score(true, pred)
-        ap = average_precision_score(true, pred)
-        pred = threshold(pred, cutpoint)
+        auc = roc_auc_score(y, y_)
+        brier = brier_score(y, y_)
+        ap = average_precision_score(y, y_)
+        pred = threshold(y_, cutpoint)
     else:
-        brier = np.round(brier_score(true, pred), round)
+        brier = np.round(brier_score(y, y_), round)
     
     # Constructing the 2x2 table
-    confmat = confusion_matrix(true, pred)
+    confmat = confusion_matrix(y, y_)
     tp = confmat[1, 1]
     fp = confmat[0, 1]
     tn = confmat[0, 0]
@@ -593,12 +657,12 @@ def clf_metrics(true,
         out['ap'] = 0
     
     # Calculating some additional measures based on positive calls
-    true_prev = int(np.sum(true == 1))
-    pred_prev = int(np.sum(pred == 1))
+    true_prev = int(np.sum(y == 1))
+    pred_prev = int(np.sum(y_ == 1))
     abs_diff = (true_prev - pred_prev) * -1
     rel_diff = np.round(abs_diff / true_prev, round)
     if mcnemar:
-        pval = mcnemar_test(true, pred).pval[0]
+        pval = mcnemar_test(y, y_).pval[0]
         if round_pval:
             pval = np.round(pval, round)
     count_outmat = np.array([true_prev, pred_prev, abs_diff, 
