@@ -110,7 +110,7 @@ class FeaturePruner:
             A dict of other args to pass to the base model fit() function.
         
         Returns
-        ----------
+        -------
         None or a pd.DataFrame of the pruned predictors.
         """
         self.factor = factor
@@ -141,10 +141,13 @@ class FeaturePruner:
         
         Parameters
         ----------
-        X : pd.DataFrame or np.array
+        X : 2d array-like
+            The dataset to be pruned.
         
         Returns
-        ----------
+        -------
+        X_ : 2d array-like
+            The pruned dataset.
         """
         if type(X) == type(pd.DataFrame([0])):
             return X[self.top_var_names]
@@ -164,8 +167,6 @@ class FullEnumeration:
     share_memory : bool, default=False
       Whether to store the X and y arrays in shared memory.
     
-    Returns
-    -------
     """
     def __init__(self, n_jobs=None, share_memory=False):
         self.n_jobs = n_jobs
