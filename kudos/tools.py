@@ -4,20 +4,6 @@ import pandas as pd
 import math
 
 
-def prop_table(y, pred, axis=0, round=2):
-    """Makes a proportions table for a vector of binary predictions."""
-    tab = pd.crosstab(y, pred)
-    if axis == 1:
-        tab = tab.transpose()
-        out = tab / np.sum(tab, axis=0)
-        out = out.transpose()
-    else:
-        out = tab / np.sum(tab, axis=0)
-    if round is not None:
-        out = np.round(out, round)
-    return out
-
-
 def onehot_matrix(y, sparse=False):
     """Converts a 1-D vector of class guesses to a one-hot matrix."""
     if not sparse:
@@ -34,9 +20,26 @@ def max_probs(arr, maxes=None, axis=1):
     return np.array(out)
 
 
-def smash_log(x, B=10, d=0):
-    """Logistic function with a little extra kick."""
-    return 1 / (1 + np.exp(-x * B)) - d
+def smash_log(X, k=10, d=0):
+    """Logistic function with a little extra kick. Used for approximating the 
+    Heaviside (e.g., unit) step function in the ``NonlinearApproxiation``.
+    
+    Parameters
+    ----------
+    X : 1d or 2d array-like
+        The binary predictors.
+    k : float, default=10.0
+        The logistic growth rate. Higher values are useful for approximating 
+        the unit step function.
+    d : A constant to subtract from the result of applying the logistic 
+        function.
+    
+    Returns
+    -------
+    y_log : 1d array of floats
+        The logisticized predictors.
+    """
+    return 1 / (1 + np.exp(-X * k)) - d
 
 
 def sparsify(col, 
@@ -136,7 +139,8 @@ def zm_to_rule(z, m, cols, rule_num=1, return_df=True):
 
 
 def split_rule(rule, var_names):
-    """Splits a single-string compound rule into two sub-rules."""
+    """Splits a single-string compound rule into two sub-rules.
+    """
     link_dict = {'and': 1, 'or': 0}
     link_id = np.where([x not in var_names for x in rule])[0][0]
     link_val = link_dict[rule[link_id]]
@@ -144,7 +148,21 @@ def split_rule(rule, var_names):
     
 
 def rule_to_y(X, rule_df):
-    """Converts a rule from DataFrame results format to a vector of guesses."""
+    """Converts a rule from DataFrame results format to a vector of guesses.
+    
+    Parameters
+    ----------
+    X : 2d array-like
+        The array of binary predictors.
+    rule_df : pd.DataFrame
+        A data frame specifying the structure of the rule, typically what's 
+        stored in an optimizer.results() attribute.
+    
+    Returns
+    -------
+    y_ : 1d array of dtype np.uint8
+        The predictions from applying the rule to the predictors.
+    """
     if rule_df.shape[0] > 1:
         rule_df = rule_df.to_frame().transpose()
     
@@ -164,14 +182,44 @@ def rule_to_y(X, rule_df):
 
 
 def rule_to_str(rule_df, n):
+    """Convert a single m-of-n classification rules to its string description.
+    
+    Parameters
+    ----------
+    rule_df : pd.DataFrame
+        The data frame holding the rules, typically what's stored in a 
+        optimizer.results() attribute.
+    n : int
+        Indicates which sub-rule of a combpound rule is being converted. Right 
+        now, this will be either ``1`` or ``2``. Does not appear in the final 
+        string description.
+    
+    Returns
+    -------
+    rule : str
+        A string description of the m-of-n rule.
+    """
     n_str = str(n)
     m = rule_df['m' + n_str].values[0]
-    n = rule_df['n' + n_str].values[0]
     rule = rule_df['rule' + n_str].values[0]
     return 'At least ' + str(m) + ' of (' + rule + ')'
 
 
 def rule_df_to_str(rule_df):
+    """Converts a potentially compound classification rule to its string 
+    description.
+    
+    Parameters
+    ----------
+    rule_df : pd.DataFrame
+        The data frame holding the rules, typically what's stored in a 
+        optimizer.results() attribute.
+    
+    Returns
+    -------
+    rule : str
+        A string description of the m-of-n rule.
+    """
     out = rule_to_str(rule_df, 1)
     if 'n2' in rule_df.columns.values:
         if rule_df.n2 != 0:
@@ -180,9 +228,29 @@ def rule_df_to_str(rule_df):
 
 
 def tab_to_vecs(tp, tn, fp, fn):
+    """Converts the counts from a 2x2 confusion matrix/contingency table to
+    a matrix of true labels and predicted labels.
+    
+    Parameters
+    ----------
+    tp : int
+        The true positive count (y_=1 | y=1).
+    tn : int
+        The true negative count (y_=0 | y=0).
+    fp : int
+        The false positive count (y_=1 | y=0).
+    fn : int
+        The false negative count (y_=0 | y=1).
+    
+    Returns
+    -------
+    y_mat : 2d array of dtype np.uint8
+        A matrix of the true labels (column 0) along with the predicted labels 
+        (column 1).
+    """
     tp = np.array([[1, 1]] * tp)
     tn = np.array([[0, 0]] * tn)
     fn = np.array([[1, 0]] * fn)
     fp = np.array([[0, 1]] * fp)
-    good = [a for a in [tp, tn, fn, fp] if a.shape[0] != 0]
-    return np.concatenate(good)
+    y_mat = [a for a in [tp, tn, fn, fp] if a.shape[0] != 0]
+    return np.concatenate(y_mat)
