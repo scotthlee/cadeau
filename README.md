@@ -38,13 +38,13 @@ Kudos is designed to be used interactively. Let's say you have a dataset named `
 
 ```python
 import pandas as pd
-from optimizers import IntegerProgram
+from kudos import optimizers
 
 data = pd.read_csv('data.csv')
 X = data[X_columns]
 y = data[y_column]
 
-ip = IntegerProgram()
+ip = optimizers.IntegerProgram()
 ip.fit(X, y)
 ```
 
